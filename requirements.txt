@@ -1,0 +1,13 @@
+streamlit
+pandas
+numpy
+matplotlib
+Pillow
+scikit-learn
+xgboost
+catboost
+statsmodels
+scipy
+tensorflow
+streamlit-extras
+openpyxl

@@ -1,0 +1,93 @@
+/* Main Titles============================================ */
+.big-title {
+    font-size: 2.7rem;
+    font-weight: bold;
+    text-align: center;
+    color: #1E88E5;
+    margin-bottom: 0.5rem;
+}
+
+.subtitle {
+    font-size: 1.7rem;
+    text-align: center;
+    color: #424242;
+    margin-bottom: 2rem;
+}
+
+/* Material Detail Cards ==================================*/
+.detail-card {
+    background-color: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 12px;
+    border-left: 5px solid #1E88E5;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.detail-label {
+    font-weight: bold;
+    color: #1565C0;
+    font-size: 1.3rem;
+}
+
+/* Next Button Alignment==================================== */
+.next-btn-container {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 2rem;
+}
+
+
+/* Optional: Better checkbox alignment */
+th[data-testid="column"]:first-child {
+    text-align: center;
+}
+
+
+/* Smaller font for detail values */
+.detail-card span:not(.detail-label) {
+    font-size: 1rem !important;
+    color: #555;
+    line-height:0.7;
+}
+
+/* Smaller font for dropdown labels and options */
+select {
+    font-size: 0.9rem !important;
+}
+
+div[data-baseweb="select"] > div {
+    font-size: 1.2rem !important;
+    padding: 0rem !important;
+}
+
+label.css-1d6h6kw,  /* Dropdown labels */
+div.row-widget.stSelectbox > label {
+    font-size: 1.1rem !important;
+    font-weight: 600;
+    color: #1565C0;
+    margin-bottom: 0.3rem;
+}
+
+/* Make dropdown containers more compact */
+div.row-widget.stSelectbox {
+    margin-bottom: 0.5rem;
+}
+
+/* Larger font for dropdown labels */
+div.row-widget.stSelectbox > label {
+    font-size: 1.1rem !important;
+    font-weight: 700;
+    color: #1565C0;
+    margin-bottom: 0.5rem;
+}
+
+/* ================= Divider Line ===================================== */
+.custom-divider {
+    border: none;            
+    height: 3px;            
+    background: #1565C0;    
+    border-radius: 2px;      
+    margin: 1.5rem 0;       
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); 
+}
