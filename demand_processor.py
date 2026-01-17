@@ -16,57 +16,110 @@ from scipy.signal import find_peaks
 from statsmodels.tsa.stattools import acf
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from scipy.stats import levene
+import plotly.express as px
+import plotly.graph_objects as go
 
 #========================================BEFORE DATA PREPARATION PLOTS============================================================================================================================
-def plot_before_preparation(df: pd.DataFrame):
+def plot_before_preparation_interactive(df: pd.DataFrame):
     """
-    يرسم الـ 4 رسوم البيانية لحالة البيانات قبل التنظيف
-    ويعيد الـ figure عشان يتعرض في Streamlit
+    يرسم 4 رسوم بيانية قبل التنظيف، كل واحد تفاعلي ومنفصل
     """
-    fig, axes = plt.subplots(2, 2, figsize=(16, 10))
-    fig.suptitle('BEFORE DATA PREPARATION', fontsize=16, fontweight='bold', y=0.98)
+    plots = {}  # dictionary لتخزين كل رسم بياني
+    
+    # 1️⃣ Raw demand line plot
+    fig1 = px.line(
+        df, 
+        x='date',
+        y='demand', 
+        title="Raw Demand Data (Before Cleaning)", 
+        labels={"date": "Date", "demand": "Demand"}
+    )
+    fig1.update_traces(line_color='#4B8F4F')
+    fig1.update_layout(
+        title_font=dict(size=16, family="Arial", color="#4B8F4F"),
+        height=430,
+        shapes=[
+        dict(
+            type="rect",
+            xref="paper", yref="paper",
+            x0=0, y0=0, x1=1, y1=1,
+            line=dict(color="lightgray", width=1),
+            fillcolor="rgba(0,0,0,0)"  # بدون تعبئة
+         )
+        ]
 
-    # Plot 1: Raw demand data
-    axes[0, 0].plot(range(len(df)), df['demand'], linewidth=1, color='steelblue', alpha=0.7)
-    axes[0, 0].set_title('Raw Demand Data (Before Cleaning)', fontsize=12, fontweight='bold')
-    axes[0, 0].set_xlabel('Record Index')
-    axes[0, 0].set_ylabel('Demand')
-    axes[0, 0].grid(True, alpha=0.3)
+    )
 
-    # Plot 2: Distribution of demand
-    axes[0, 1].hist(df['demand'].dropna(), bins=30, edgecolor='black', color='coral', alpha=0.7)
-    axes[0, 1].set_title('Demand Distribution (Before Cleaning)', fontsize=12, fontweight='bold')
-    axes[0, 1].set_xlabel('Demand')
-    axes[0, 1].set_ylabel('Frequency')
-    axes[0, 1].grid(True, alpha=0.3, axis='y')
+    plots['Raw Demand'] = fig1
 
-    # Plot 3: Box plot for outlier detection
-    axes[1, 0].boxplot(df['demand'].dropna(), vert=True, patch_artist=True,
-                      boxprops=dict(facecolor='lightblue', alpha=0.7))
-    axes[1, 0].set_title('Box Plot - Outlier Detection (Before)', fontsize=12, fontweight='bold')
-    axes[1, 0].set_ylabel('Demand')
-    axes[1, 0].grid(True, alpha=0.3, axis='y')
+    # 2️⃣ Distribution of demand (Histogram)
+    fig2 = px.histogram(
+        df, 
+        x='demand', 
+        nbins=30, 
+        title="Demand Distribution (Before Cleaning)", 
+        color_discrete_sequence=['coral']
+    )
+    fig2.update_layout(title_font=dict(size=16, family="Arial", color='coral'),
+        height=430,
+        shapes=[
+        dict(
+            type="rect",
+            xref="paper", yref="paper",
+            x0=0, y0=0, x1=1, y1=1,
+            line=dict(color="lightgray", width=1),
+            fillcolor="rgba(0,0,0,0)"  # بدون تعبئة
+         )
+        ])
+    plots['Distribution'] = fig2
 
-    # Plot 4: Missing values info
+    # 3️⃣ Box plot for outliers
+    fig3 = px.box(
+        df, 
+        y='demand', 
+        title="Box Plot - Outlier Detection (Before)", 
+        color_discrete_sequence=['#AB47BC']
+    )   
+    fig3.update_layout(title_font=dict(size=16, family="Arial", color='#AB47BC'),
+        height=430,
+        shapes=[
+        dict(
+            type="rect",
+            xref="paper", yref="paper",
+            x0=0, y0=0, x1=1, y1=1,
+            line=dict(color="lightgray", width=1),
+            fillcolor="rgba(0,0,0,0)"  # بدون تعبئة
+         )
+        ])
+    plots['Box Plot'] = fig3
+
+    # 4️⃣ Missing values bar chart
     columns_to_check = ['date', 'demand'] if 'date' in df.columns else ['demand']
-    missing_info = df[columns_to_check].isnull().sum()
-    
-    colors = ['skyblue' if col == 'date' else 'salmon' for col in missing_info.index]
-    axes[1, 1].bar(missing_info.index, missing_info.values, 
-                   color=colors, alpha=0.7, edgecolor='black')
-    axes[1, 1].set_title('Missing Values Count (Before)', fontsize=12, fontweight='bold')
-    axes[1, 1].set_ylabel('Count')
-    axes[1, 1].grid(True, alpha=0.3, axis='y')
+    missing_info = df[columns_to_check].isnull().sum().reset_index()
+    missing_info.columns = ['Column', 'Missing Count']
 
-    # إضافة الأرقام فوق الأعمدة
-    for i, v in enumerate(missing_info.values):
-        axes[1, 1].text(i, v + max(missing_info.values)*0.01, str(v), 
-                        ha='center', fontweight='bold')
+    colors = ['skyblue' if col == 'date' else 'salmon' for col in missing_info['Column']]
+    fig4 = go.Figure(data=[go.Bar(
+        x=missing_info['Column'],
+        y=missing_info['Missing Count'],
+        marker_color=colors,
+        text=missing_info['Missing Count'],
+        textposition='auto'
+    )])
+    fig4.update_layout(title="Missing Values Count (Before)", title_font=dict(size=16, family="Arial"),
+        height=430,
+        shapes=[
+        dict(
+            type="rect",
+            xref="paper", yref="paper",
+            x0=0, y0=0, x1=1, y1=1,
+            line=dict(color="lightgray", width=1),
+            fillcolor="rgba(0,0,0,0)"  # بدون تعبئة
+         )
+        ])
+    plots['Missing Values'] = fig4
 
-    plt.tight_layout()
-    
-    return fig
-
+    return plots
 
 # ===================== DATA PREPARATION ==========================================================================================
 def prepare_demand_data(df: pd.DataFrame):
@@ -80,7 +133,7 @@ def prepare_demand_data(df: pd.DataFrame):
     df = df.sort_values('date')
     df.set_index('date', inplace=True)
 
-    # ------------------- STEP 2: MISSING VALUES -------------------
+    # ------------------- STEP 2: MISSING VALUES -------------------بيحسب عدد القيم المفقودة في عمود معين
     prep_results['missing_values_before'] = df['demand'].isnull().sum()
     # Forward fill small gaps
     df['demand'] = df['demand'].fillna(method='ffill', limit=3)
@@ -103,7 +156,7 @@ def prepare_demand_data(df: pd.DataFrame):
     df['demand_original'] = df['demand'].copy()
     df['demand'] = df['demand'].clip(lower=lower, upper=upper)
 
-    # ------------------- STEP 4: REGULAR TIME FREQUENCY -------------------
+    # ------------------- STEP 4: REGULAR TIME FREQUENCY -------------------بيحسب عدد الأيام اللي ناقصة تمامًا في الجدول.
     date_range = pd.date_range(df.index.min(), df.index.max(), freq='D')
     prep_results['expected_records'] = len(date_range)
     prep_results['actual_records'] = len(df)
@@ -149,60 +202,60 @@ def prepare_demand_data(df: pd.DataFrame):
     return df_clean, prep_results
 
 
-def plot_after_preparation(df_clean):
+def plot_after_preparation(df_clean: pd.DataFrame):
+    """
+    Interactive AFTER DATA PREPARATION visualizations
+    """
+    plots = {}
 
-    fig, axes = plt.subplots(3, 2, figsize=(16, 14))
-    fig.suptitle('AFTER DATA PREPARATION', fontsize=16, fontweight='bold', y=0.995)
+    # 1️⃣ Cleaned Demand Time Series
+    fig1 = px.line(
+        df_clean,
+        x=df_clean.index,
+        y='demand',
+        title="Cleaned Demand Time Series",
+        labels={"x": "Date", "demand": "Demand"}
+    )
+    fig1.update_traces(line_color='#4B8F4F')
+    fig1.update_layout(title_font=dict(size=16, color='#4B8F4F'), height=430)
+    plots['Cleaned Demand'] = fig1
 
-    # Plot 1: Cleaned demand time series
-    axes[0, 0].plot(df_clean.index, df_clean['demand'], linewidth=1.5, alpha=0.8)
-    axes[0, 0].set_title('Cleaned Demand Time Series', fontsize=12, fontweight='bold')
-    axes[0, 0].set_xlabel('Date')
-    axes[0, 0].set_ylabel('Demand')
-    axes[0, 0].grid(True, alpha=0.3)
+    # 2️⃣ Distribution after cleaning
+    fig2 = px.histogram(df_clean, x='demand', nbins=30, title="Demand Distribution (After Cleaning)",
+                        color_discrete_sequence=['#FF7043'])
+    fig2.update_layout(title_font=dict(size=16, color='#FF7043'), height=430)
+    plots['Distribution'] = fig2
 
-    # Plot 2: Distribution after cleaning
-    axes[0, 1].hist(df_clean['demand'], bins=30, edgecolor='black', alpha=0.7)
-    axes[0, 1].set_title('Demand Distribution (After Cleaning)', fontsize=12, fontweight='bold')
-    axes[0, 1].set_xlabel('Demand')
-    axes[0, 1].set_ylabel('Frequency')
-    axes[0, 1].grid(True, alpha=0.3, axis='y')
+    # 3️⃣ Demand with Moving Averages
+    fig3 = go.Figure()
+    fig3.add_trace(go.Scatter(x=df_clean.index, y=df_clean['demand'], name='Demand', opacity=0.4))
+    fig3.add_trace(go.Scatter(x=df_clean.index, y=df_clean['demand_ma_7'], name='7-Day MA'))
+    fig3.add_trace(go.Scatter(x=df_clean.index, y=df_clean['demand_ma_30'], name='30-Day MA'))
+    fig3.update_layout(title="Demand with Moving Averages", height=430)
+    plots['Moving Averages'] = fig3
 
-    # Plot 3: Moving averages
-    axes[1, 0].plot(df_clean.index, df_clean['demand'], alpha=0.4, label='Demand', linewidth=1)
-    axes[1, 0].plot(df_clean.index, df_clean['demand_ma_7'], linewidth=2, label='7-Day MA')
-    axes[1, 0].plot(df_clean.index, df_clean['demand_ma_30'], linewidth=2, label='30-Day MA')
-    axes[1, 0].set_title('Demand with Moving Averages', fontsize=12, fontweight='bold')
-    axes[1, 0].set_xlabel('Date')
-    axes[1, 0].set_ylabel('Demand')
-    axes[1, 0].legend()
-    axes[1, 0].grid(True, alpha=0.3)
+    # 4️⃣ Box Plot After Cleaning
+    fig4 = px.box(df_clean, y='demand', title="Box Plot (After Cleaning)",
+                  color_discrete_sequence=['#AB47BC'])
+    fig4.update_layout(title_font=dict(size=16, color='#AB47BC'), height=430)
+    plots['Box Plot'] = fig4
 
-    # Plot 4: Box plot after cleaning
-    axes[1, 1].boxplot(df_clean['demand'], vert=True, patch_artist=True,
-                       boxprops=dict(alpha=0.7))
-    axes[1, 1].set_title('Box Plot (After Cleaning)', fontsize=12, fontweight='bold')
-    axes[1, 1].set_ylabel('Demand')
-    axes[1, 1].grid(True, alpha=0.3, axis='y')
+    # 5️⃣ Autocorrelation
+    from statsmodels.graphics.tsaplots import plot_acf
+    acf_fig = px.line(x=list(range(40)), y=acf(df_clean['demand'], nlags=39))
+    acf_fig.update_layout(title="Autocorrelation Plot", height=430)
+    plots['Autocorrelation'] = acf_fig
 
-    # Plot 5: Autocorrelation
-    autocorrelation_plot(df_clean['demand'], ax=axes[2, 0])
-    axes[2, 0].set_title('Autocorrelation Plot', fontsize=12, fontweight='bold')
-    axes[2, 0].grid(True, alpha=0.3)
+    # 6️⃣ Weekly Pattern
+    weekly_avg = df_clean.groupby('day_of_week')['demand'].mean().reset_index()
+    fig6 = px.bar(weekly_avg, x='day_of_week', y='demand',
+                  title="Average Demand by Day of Week",
+                  labels={'day_of_week': 'Day of Week', 'demand': 'Average Demand'},
+                  color_discrete_sequence=['#42A5F5'])
+    fig6.update_layout(height=430)
+    plots['Weekly Pattern'] = fig6
 
-    # Plot 6: Weekly pattern
-    weekly_avg = df_clean.groupby('day_of_week')['demand'].mean()
-    day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    axes[2, 1].bar(range(7), weekly_avg.values, alpha=0.7)
-    axes[2, 1].set_xticks(range(7))
-    axes[2, 1].set_xticklabels(day_names)
-    axes[2, 1].set_title('Average Demand by Day of Week', fontsize=12, fontweight='bold')
-    axes[2, 1].set_xlabel('Day of Week')
-    axes[2, 1].set_ylabel('Average Demand')
-    axes[2, 1].grid(True, alpha=0.3, axis='y')
-
-    plt.tight_layout()
-    return fig
+    return plots
 
 #============================================================================
 
@@ -239,42 +292,45 @@ def aggregate_demand(df, period_selected):
 
 # ==================== Streamlit UI ====================
 def show_aggregated_table(df_prepared):
-
     period = st.selectbox(
         "Select Period",
         ["Daily","Weekly", "Monthly", "Quarterly", "Semi-Annual", "Annual"],
         index=2,  # Default Monthly
-        key="aggregated_period_select"  # مفتاح فريد عشان الاستقرار
+        key="aggregated_period_select"  # Unique key for session state
     )
 
+    # Aggregate demand for selected period
     agg_df = aggregate_demand(df_prepared, period)
 
     if agg_df is not None:
-        st.dataframe(agg_df)
+        # --- CHANGE MADE HERE ---
+        # Pass the FULL 'agg_df' (do not use .head(7))
+        # Set 'height' so only ~7 rows are visible initially, but user can scroll.
+        st.dataframe(agg_df, height=300) 
 
-        # Export to Excel
+        # Export full table to Excel
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             agg_df.to_excel(writer, sheet_name='Aggregated Data')
         processed_data = output.getvalue()
 
         st.download_button(
-            label="Download Excel",
+            label="Download Full Aggregated Table",
             data=processed_data,
             file_name=f"aggregated_demand_{period}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
     return period, agg_df
-
 # =====================COMPARATIVE VISUALIZATION ==================================================================================================================================
+
+import plotly.graph_objects as go
+import plotly.subplots as sp
 
 def plot_comparative_demand(df_prepared, selected_period):
     """
-    Plots comparative demand across periods starting from selected_period.
-    Only shows the selected period and larger aggregations (not smaller ones).
+    Interactive plot for ONLY the selected period.
     """
-    # Map periods to pandas resample frequencies
     period_map = {
         'Daily': 'D',
         'Weekly': 'W',
@@ -284,68 +340,46 @@ def plot_comparative_demand(df_prepared, selected_period):
         'Annual': 'Y'
     }
 
-    # Define the order of periods (smallest to largest)
-    period_order = ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Semi-Annual', 'Annual']
-    colors = ['steelblue', 'coral', 'mediumseagreen', 'mediumpurple', 'orange', 'crimson']
+    colors = {
+        'Daily': 'steelblue',
+        'Weekly': 'coral',
+        'Monthly': 'mediumseagreen',
+        'Quarterly': 'mediumpurple',
+        'Semi-Annual': 'orange',
+        'Annual': 'crimson'
+    }
 
-    # Find the starting index and get periods from selected onward
-    start_idx = period_order.index(selected_period)
-    show_periods = period_order[start_idx:]  # This will exclude smaller periods
+    # Build aggregation for the selected period only
+    if selected_period == 'Daily':
+        agg = df_prepared[['demand']].copy()
+        agg.columns = ['Total']
+    else:
+        agg = df_prepared['demand'].resample(period_map[selected_period]).agg(['sum','mean','min','max'])
+        agg.columns = ['Total','Average','Min','Max']
 
-    # Create aggregations only for periods we want to show
-    aggregations = {}
-    for p in show_periods:
-        if p == 'Daily':
-            agg = df_prepared[['demand']].copy()
-            agg.columns = ['Total']
-        else:
-            agg = df_prepared['demand'].resample(period_map[p]).agg(['sum','mean','min','max'])
-            agg.columns = ['Total','Average','Min','Max']
-        aggregations[p] = agg
+    # Create interactive plot
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=agg.index,
+            y=agg['Total'],
+            mode='lines+markers',
+            line=dict(color=colors[selected_period], width=2),
+            marker=dict(size=6),
+            name="Total Demand"
+        )
+    )
 
-    # Calculate grid layout
-    n_plots = len(show_periods)
-    n_rows = (n_plots + 1) // 2
-    n_cols = 2
+    fig.update_layout(
+        title=f"Total Demand - {selected_period}",
+        xaxis_title="Date",
+        yaxis_title="Demand",
+        template="plotly_white",
+        height=430,
+        width=900
+    )
 
-    # Create subplots
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(18, 5*n_rows))
-    
-    # Handle different axes configurations
-    if n_rows == 1 and n_cols == 2:
-        axes = axes.reshape(1, -1)
-    elif n_rows == 1:
-        axes = [axes]
-    elif n_cols == 1:
-        axes = [[ax] for ax in axes]
-
-    fig.suptitle('TOTAL DEMAND ACROSS TIME PERIODS', fontsize=16, fontweight='bold', y=0.995)
-
-    # Plot each period
-    for idx, period in enumerate(show_periods):
-        row = idx // 2
-        col = idx % 2
-        ax = axes[row][col] if n_rows > 1 else axes[col]
-
-        # Use the color corresponding to the period's position in the original order
-        color_idx = period_order.index(period)
-        
-        ax.plot(aggregations[period].index, aggregations[period]['Total'],
-                linewidth=2, color=colors[color_idx], marker='o', markersize=6)
-        ax.set_ylabel('Total Demand')
-        ax.set_title(period, fontsize=12, fontweight='bold')
-        ax.set_xlabel('Date')
-        ax.grid(True, alpha=0.3)
-        ax.tick_params(axis='x', rotation=45)
-
-    # Hide empty subplot if odd number of plots
-    if n_plots % 2 != 0:
-        empty_ax = axes[-1][-1] if n_rows > 1 else axes[-1]
-        empty_ax.axis('off')
-
-    plt.tight_layout()
     return fig
-
 
 # =====================tests ==================================================================================================================================
 
