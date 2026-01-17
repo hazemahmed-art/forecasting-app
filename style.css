@@ -91,3 +91,18 @@ div.row-widget.stSelectbox > label {
     margin: 1.5rem 0;       
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); 
 }
+
+.report-section-title {
+    font-size: 24px;
+    font-weight: bold;
+    color: #0d47a1;
+    margin-bottom: 15px;
+    border-bottom: 2px solid #0d47a1;
+    padding-bottom: 5px;
+}
+.custom-divider {
+    border: 0;
+    height: 1px;
+    background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0));
+    margin: 20px 0;
+}
