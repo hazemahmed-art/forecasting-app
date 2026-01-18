@@ -136,6 +136,7 @@ def page_material():
     # ========================= Titles =========================
     st.markdown('<div class="big-title">Material Selection</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">Select a Target Material</div>', unsafe_allow_html=True)
+    
     # ========================= Load Data =========================
     file_path = "Database/Material Information.xlsx"
 
@@ -278,11 +279,16 @@ def page_material():
                 st.warning("Please select an Item Code to proceed.")
             else:
                 row = filtered_df[filtered_df['Item Code'] == selected_code].iloc[0]
+                
+                # ================= SAVE DATA =================
                 st.session_state.selected_material_row = row
+                
+                # --- SAVE PURCHASING UNIT SPECIFICALLY ---
+                # This saves the purchasing unit to a specific key so you can find it easily later
+                st.session_state['selected_purchasing_unit'] = row['Purchasing Unit']
                 st.session_state.page = "data"
                 st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
-
 # =====================================================================================================================
 # ============================================ PAGE 2 : DATA & PERIOD ================================================
 # =====================================================================================================================
@@ -338,14 +344,14 @@ def page_data():
         # Check if we have a selected material
         if 'selected_material_row' in st.session_state:
             item_code = st.session_state.selected_material_row['Item Code']
-            db_path = "Database/demand_history.xlsx"
+            db_path = "Database/ai demand history.xlsx"
             
             if os.path.exists(db_path):
                 try:
                     # Read the sheet corresponding to the item code
                     df_display = pd.read_excel(db_path, sheet_name=item_code)
                 except ValueError:
-                    st.error(f"Sheet '{item_code}' not found in 'demand_history.xlsx'")
+                    st.error(f"Sheet '{item_code}' not found in 'ai demand history.xlsx'")
                 except Exception as e:
                     st.error(f"Error reading database file: {e}")
             else:
@@ -424,7 +430,7 @@ def page_data():
 
     with col_back:
         if st.button("← Back", use_container_width=True):
-            st.session_state.page = "material"
+            st.session_state.page = "Material Selection"
             st.rerun()
 
     with col_next:
@@ -1137,14 +1143,10 @@ def results_from_analysis_page():
     col_left, col_spacer, col_right = st.columns([1, 2, 1])
     with col_left:
         if st.button("← Back to Data Analysis", use_container_width=True):
-            st.session_state.page = "analysis4"
+            st.session_state.page = "analysis3"
             st.rerun()
             
-    with col_spacer:
-        
-        if st.button("Unit Price Forecasting", use_container_width=True):
-            st.session_state.page = "price forecasting"
-            st.rerun()
+
     with col_right:
         if st.button("Next → Run Forecasting Models", type="primary", use_container_width=True):
             if 'recommendation' in st.session_state and st.session_state['recommendation']:
@@ -1159,54 +1161,43 @@ def results_from_analysis_page():
 
 
 def recommendation_page(): 
-    st.markdown('<div class="big-title" style="margin-bottom: 1.5rem;">Sammary & Recommendation Forecasting Model</div>', unsafe_allow_html=True)
-
-    # ==================== AUTO-RUN PRICE FORECAST BLOCK ====================
-    # We check if the result exists. If not, we calculate it immediately.
+    st.markdown('<div class="big-title">Summary & Recommendation</div>', unsafe_allow_html=True)
+    purchasing_unit = st.session_state.get('selected_purchasing_unit', 'Unit')
+    # 1. Check if the result exists
     if 'price_forecast_df' not in st.session_state or st.session_state.price_forecast_df is None:
         
-        # 1. Validate Data Availability
+        # 2. VALIDATE that the uploaded file exists
         if 'df_uploaded' not in st.session_state:
-            st.error("Data not found. Please upload a file first.")
-            if st.button("Go to Upload"):
-                st.session_state.page = "data"
-                st.rerun()
+            st.error("Please upload data first.")
             return
 
+        # FIXED INDENTATION STARTS HERE
         df = st.session_state['df_uploaded'].copy()
+        
+        # Standardize column names
+        df.columns = df.columns.str.strip().str.lower()
 
-        # 2. Validate Columns (Standardize names)
-        df.columns = df.columns.str.lower()
-        if not all(col in df.columns for col in ['date', 'price']):
-            st.error("The uploaded file must contain 'date' and 'price' columns.")
+        # --- DEBUGGING STEP ---
+        expected = ['date', 'price received', 'quantity received']
+        
+        if not all(col in df.columns for col in expected):
+            st.error(f"❌ Column mismatch!")
+            st.write("Your file has these columns:", list(df.columns))
+            st.info("Required: 'date', 'price received', and 'quantity received'")
             return
 
-        # 3. Run Calculation Automatically
-        with st.spinner("Automatically running Price Forecast..."):
-            try:
-                # We use a progress bar to visualize the auto-run
-                progress_bar = st.progress(0, text="Initializing Price Model...")
-                
-                # Call your existing forecast function (Assuming it returns: price, df, plot_buf)
-                forecasted_price, result_df, plot_buf = forecast_price(df)
-                
-                progress_bar.progress(50, text="Saving results...")
-                
-                # SAVE TO SESSION STATE so it persists
-                st.session_state.forecasted_price = forecasted_price
-                st.session_state.price_forecast_df = result_df
-                st.session_state.price_forecast_plot = plot_buf
-                
-                progress_bar.progress(100, text="Done!")
-                
-                # --- REMOVED time.sleep(0.5) HERE TO FIX THE ERROR ---
-                progress_bar.empty()
-
-                #st.success("Price Forecast calculated successfully.")
-
-            except Exception as e:
-                st.error(f"Auto-forecast failed: {str(e)}")
-                return
+        # If check passes, run the forecast
+        try:
+            forecasted_price, result_df, plot_buf = forecast_price(df)
+            
+            # Save results to session state so they persist
+            st.session_state.forecasted_price = forecasted_price
+            st.session_state.price_forecast_df = result_df
+            st.session_state.price_forecast_plot = plot_buf
+            
+        except Exception as e:
+            st.error(f"Error in calculation: {e}")
+            
     # =======================================================================
 
     # ==================== DISPLAY PRICE FORECAST RESULTS ====================
@@ -1235,7 +1226,7 @@ def recommendation_page():
                 <h3 style="color:#1565C0; margin:0;">
                     Forecasted Average Price for Year (
                     <strong style="color: rgb(255, 75, 75);">{next_year}</strong> ): 
-                    <strong style="color: rgb(255, 75, 75);">{forecast_val:.3f}</strong> $             
+                    <strong style="color: rgb(255, 75, 75);">{forecast_val:.3f}</strong> $ per {purchasing_unit}             
                 </h3>
             </div>
             """, unsafe_allow_html=True)
@@ -1329,7 +1320,7 @@ def recommendation_page():
 
         # Fallback
         if not recommendations:
-            recommendations.append("Decision Tree")
+            recommendations.append("ARIMA")
 
         rec_text = " • ".join(dict.fromkeys(recommendations))  # remove duplicates
 
@@ -1382,7 +1373,7 @@ def recommendation_page():
             st.markdown("""
                 <div style='display: flex; align-items: center; gap: 10px;'>
                     <h3>Recommended Models Based on Demand Pattern for Forecasting:</h3>
-                    <span style="margin-left:-30px; margin-top:40px; " class="help-icon" data-help="These recommendations are derived from comprehensive analysis of stationarity, seasonality, noise, demand type, trend, and structural changes">?</span>
+                    <span style="margin-left:-40px; margin-top:40px; " class="help-icon" data-help="These recommendations are derived from comprehensive analysis of stationarity, seasonality, noise, demand type, trend, and structural changes">?</span>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -1658,6 +1649,11 @@ def forecasting_page():
             </div>
         """, unsafe_allow_html=True)
 
+        st.session_state['test_mape'] = mape_val
+        st.session_state['test_mae'] = mae_val
+        st.session_state['test_rmse'] = rmse_val
+        st.session_state['test_total_actual'] = total_actual_demand
+        st.session_state['test_total_forecast'] = total_forecasted_demand
     # --- COLUMN 3: Detailed Comparison Chart ---
     with main_col3:
         st.markdown("### 📈 Segmented Comparison")
@@ -1850,7 +1846,8 @@ def future_forecasting_page():
                 value=default_val,
                 step=1,
                 key="future_steps_input", # This key links to the CSS above
-                help="Choose the number of future months to predict (e.g., 12 for one year)"
+                help="Smooth Demand: Forecast a horizon of 6 to 24 months. Scientific stationarity and low variance in smooth data allow for high long-term statistical confidence, enabling more stable strategic procurement and capacity planning." 
+                "Erratic Demand: Limit the forecast horizon to 2 to 6 months. High volatility and a high Coefficient of Variation ($CV^2$) lead to rapid error accumulation (forecast drift). Shorter horizons are required to maintain agility and prevent massive over-stocking or stockouts."
             )
 
             st.session_state.future_steps = future_steps
@@ -2057,17 +2054,48 @@ def future_forecasting_page():
                             st.session_state.forecasted_price = None
             
             # 2. NAVIGATION LOGIC BASED ON DEMAND TYPE
-            if demand_type == "Smooth":
+
+
+            @st.dialog("⚠️ Model Incompatibility Warning", width="large")
+            def show_demand_incompatibility_warning(demand_type):
+                st.markdown(f"### 🧬 Scientific Rationale: {demand_type} Demand")
+                
+                st.error(f"Economic Order Quantity (EOQ) and Continuous/Periodic Review models cannot be applied to **{demand_type}** demand patterns.")
+                
+                st.markdown("""
+                The mathematical foundations of traditional inventory theory rely on **Stationary Demand**. Your data violates these core assumptions:
+                
+                * **Violation of Normality:** Intermittent and Lumpy demand patterns contain frequent 'zero-demand' periods. Standard models assume a Gaussian (Normal) distribution, which results in mathematically impossible safety stock levels when zeros are present.
+                * **Coefficient of Variation ($CV^2$):** In Lumpy demand, the variance-to-mean ratio ($CV^2 > 0.49$) is too high. Using EOQ here would cause the **Bullwhip Effect**, leading to massive over-stocking or catastrophic stockouts.
+                * **Discrete Pulse Nature:** These demand types are 'Discrete Events' rather than 'Continuous Flows.' The Square Root Law ($Q = \sqrt{2DS/H}$) fails because demand does not 'drain' at a constant rate.
+                """)
+
+                
+
+                st.info("💡 **Recommendation:** Consider using **Croston’s Method** or **Syntetos-Babai (SBA)** logic for this specific item to ensure replenishment matches actual consumption spikes.")
+                
+                if st.button("Acknowledge & Return", use_container_width=True):
+                    st.session_state.show_warning = False
+                    st.rerun()
+
+            # ================= CALCULATION LOGIC =================
+
+            # Check demand type suitability
+            if demand_type in ["Intermittent", "Lumpy"] or demand_type is None:
+                # Trigger the dialog state
+                if "show_warning" not in st.session_state:
+                    st.session_state.show_warning = True
+                
+                if st.session_state.show_warning:
+                    show_demand_incompatibility_warning(demand_type)
+                    st.stop()
+
+
+            elif demand_type == "Smooth":
                 st.session_state.page = "eoq_smooth1"
             
             elif demand_type == "Erratic":
                 st.session_state.page = "eoq_erratic1"
-            
-            elif demand_type in ["Intermittent", "Lumpy"] or demand_type is None:
-                # Show warning for Intermittent, Lumpy, or unknown types
-                st.warning(f"⚠️ EOQ Calculation skipped for demand type: **{demand_type}**.")
-                # Do not rerun, so the user stays on the page to see the warning
-                return 
             
             else:
                 # Fallback for any other case
@@ -2082,84 +2110,77 @@ def future_forecasting_page():
 # ================================================ price forecating page ==============================================
 # =====================================================================================================================
 def price_forecasting_page(): 
-    st.markdown('<div class="big-title">Price Forecasting</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Average Price Forecasting for Next-Year</div>', unsafe_allow_html=True)
+    st.markdown('<div class="big-title">Price Forecasting (Weighted)</div>', unsafe_allow_html=True)
 
-    # التحقق من وجود البيانات
     if 'df_uploaded' not in st.session_state:
-        st.warning("Please upload your data file first from the Data Upload page.")
-        if st.button("← Back to Data Upload"):
-            st.session_state.page = "data"
-            st.rerun()
+        st.warning("Please upload your data file first.")
         return
 
-    df = st.session_state['df_uploaded']
+    df = st.session_state['df_uploaded'].copy()
+    # Normalize column names to lowercase for easier checking
     df.columns = df.columns.str.lower()
 
-    if not all(col in df.columns for col in ['date', 'price']):
-        st.error("The uploaded file must contain both 'date' and 'price' columns.")
+    # Updated Required Columns Check
+    required_cols = ['date', 'price received', 'quantity received']
+            
+    if not all(col in df.columns for col in required_cols):
+        st.error(f"The uploaded file must contain the following columns: {', '.join(required_cols)}")
         return
 
-
-    # ================= AUTO-RUN FORECAST =================
-    with st.spinner("Calculating forecast..."):
+    with st.spinner("Calculating weighted forecast..."):
         try:
-            forecasted_price, result_df, plot_buf = forecast_price(df.copy())
+            forecasted_price, result_df, plot_buf = forecast_price(df)
             
-            st.session_state.forecasted_price = forecasted_price
-            st.session_state.price_forecast_df = result_df 
+            # Identify next year for display
+            next_year = int(result_df['Year'].max())
 
-            next_year = int(result_df.loc[result_df['Forecasted Price'].notna(), 'Year'].values[0])
-
-
-            # 2. Create 3 Columns for the data details
-            col1, col2, col3 = st.columns([1,1,2]) # Adjust ratios as needed
+            col1, col2, col3 = st.columns([1,1,2])
 
             with col1:
-                st.markdown("#### Price Forecasting Using Linear Regression Method")
-                # 1. Main Forecast Result (Full Width)
+                st.markdown("#### Weighted Average Forecast")
                 st.markdown(f"""
-                <div class="detail-card" style="padding: 1.5rem; border-radius: 10px; background-color: #f8f9fa; margin-bottom: 4rem; border-left: 5px solid #1565C0;">
+                <div style="padding: 1.5rem; border-radius: 10px; background-color: #f8f9fa; border-left: 5px solid #1565C0;">
                     <h3 style="color:#1565C0; margin:0;">
-                        Forecasted Average Price for Year (
-                        <strong style="color: rgb(255, 75, 75);">{next_year}</strong> ): <br/>
-                        <strong style="color: rgb(255, 75, 75);">{forecasted_price:.3f}</strong> $
+                        Forecast for {next_year}: <br/>
+                        <span style="color: #FF4B4B;">{forecasted_price:.3f} $</span>
                     </h3>
                 </div>
                 """, unsafe_allow_html=True)
 
-
             with col2:
-                st.markdown("#### Annual Price Summary")
-                st.dataframe(
-                    result_df.style.format({
-                        'Actual Price': '{:.2f}',
-                        'Forecasted Price': '{:.2f}'
-                    }),
-                    height=400 
-                )  
-
-
-
+                st.markdown("#### Annual Summary")
+                st.dataframe(result_df.style.format({'Actual Price': '{:.2f}', 'Forecasted Price': '{:.2f}'}))
 
             with col3:
-                st.markdown("#### Price Trend & Forecast")
+                st.markdown("#### Price Trend")
                 st.image(plot_buf, use_container_width=True) 
 
         except Exception as e:
-            st.error(f"An error occurred during forecasting: {str(e)}")
+            st.error(f"Error: {str(e)}")
 
-    # Navigation Buttons
+
+                # Navigation Buttons
+
     col_left, col_spacer, col_right = st.columns([1, 2, 1])
+
     with col_left:
+
         if st.button("← Back", use_container_width=True):
+
             st.session_state.page = "results from analysis"
+
             st.rerun()
+
+
 
     with col_right:
+
         if st.button("Next → Recommendated Model", type="primary", use_container_width=True):
+
             st.session_state.page = "recommendation"
+
             st.rerun()
+
 
 # =====================================================================================================================
 # ================================================ EOQ & Safety Stock ======================================================
@@ -2560,7 +2581,7 @@ def eoq_smooth1_page():
                 st.rerun()
 
         with col_right:
-            if st.button("Next → Sefety Stick & Re-Ordering Point", type="primary", use_container_width=True):
+            if st.button("Next → Sefety Stock & Re-Ordering Point", type="primary", use_container_width=True):
                 st.session_state.page = "eoq_smooth2"
                 st.rerun()
 
@@ -3537,25 +3558,26 @@ def eoq_smooth5_page():
             \n- **Final Unit Price:** ${best_offer['New Price']:.2f}
             \n- **Recommended Order Quantity:** {best_offer['Order Qty']:.2f} units
             """)
-#\n- **Total Annual Cost:** ${best_offer['Total Cost']:,.2f}
-#\n- **Total Savings:** ${best_offer['Total Savings']:,.2f}
             
+            if st.session_state.supplier_offers:
+                best_offer = min(st.session_state.supplier_offers, key=lambda x: x['Total Cost'])
+                st.session_state['best_offer_data'] = best_offer
 
         with col_old:
             st.markdown(f"""
                 <div style="background-color:#F8F9FA; border:1px solid #E0E0E0; border-radius:10px; padding:15px; text-align:center;">
-                    <div style="font-size:0.9rem; color:#666;">Baseline Total Cost</div>
+                    <div style="font-size:0.9rem; color:#111;">Baseline Total Cost</div>
                     <div style="font-size:1.8rem; font-weight:bold; color:#1565C0;">${baseline_cost:,.2f}</div>
-                    <div style="font-size:0.85rem; color:#777;">Standard EOQ</div>
+                    <div style="font-size:0.85rem; color:#222;">Standard EOQ</div>
                 </div>
             """, unsafe_allow_html=True)
         
         with col_new:
             st.markdown(f"""
                 <div style="background-color:#E8F5E9; border:1px solid #4CAF50; border-radius:10px; padding:15px; text-align:center;">
-                    <div style="font-size:0.9rem; color:#666;">Best Offer Cost</div>
+                    <div style="font-size:0.9rem; color:#111;">Best Offer Cost</div>
                     <div style="font-size:1.8rem; font-weight:bold; color:#2E7D32;">${best_offer['Total Cost']:,.2f}</div>
-                    <div style="font-size:0.85rem; color:#777;">Qty: {best_offer['Order Qty']:.0f} • Price: ${best_offer['New Price']:.2f}</div>
+                    <div style="font-size:0.85rem; color:#222;">Qty: {best_offer['Order Qty']:.0f} • Price: ${best_offer['New Price']:.2f}</div>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -3566,9 +3588,9 @@ def eoq_smooth5_page():
             
             st.markdown(f"""
                 <div style="background-color:#FFF3E0; border:1px solid #FF9800; border-radius:10px; padding:15px; text-align:center;">
-                    <div style="font-size:0.9rem; color:#666;">{label_savings}</div>
+                    <div style="font-size:0.9rem; color:#111;">{label_savings}</div>
                     <div style="font-size:1.8rem; font-weight:bold; color:{color_savings};">${savings:,.2f}</div>
-                    <div style="font-size:0.85rem; color:#777;">Difference</div>
+                    <div style="font-size:0.85rem; color:#222;">Difference</div>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -3589,12 +3611,1613 @@ def eoq_smooth5_page():
             st.session_state.page = "supplier report"
             st.rerun()
 
+    with col_middle:
+        if st.button("Final Summary", type="primary", use_container_width=True):
+            st.session_state.page = "smooth_final_summary"
+            st.rerun()
 
+
+
+def smooth_final_summary_page():
+    st.markdown('<div class="big-title">Executive Inventory Summary</div>', unsafe_allow_html=True)
+    #st.markdown('<div class="subtitle">Forecasting Accuracy, Costs, and Inventory Policy</div>', unsafe_allow_html=True)
+
+    # ================= RETRIEVE DATA FROM SESSION STATE =================
+    
+    # 1. Forecasting & Model Selection
+    selected_model = st.session_state.get('selected_model', 'N/A')
+    # ... (Error metrics retrieval remains same) ...
+    test_mape = st.session_state.get('test_mape', 0)
+    test_rmse = st.session_state.get('test_rmse', 0)
+    
+    # 2. Demand & Future Forecast
+    demand_type = st.session_state.get('demand_type_classification', 'N/A')
+    future_forecast_arr = st.session_state.get('future_forecast', [0])
+    total_future_demand = float(np.sum(future_forecast_arr))
+    future_dates = st.session_state.get('future_dates', None)
+    future_steps = len(future_forecast_arr)
+    
+    # 3. Price & Cost
+    # Initially retrieve standard values
+    unit_price = st.session_state.get('final_unit_price', 0)
+    purchasing_unit = st.session_state.get('selected_purchasing_unit', 'Unit')
+    ordering_cost = st.session_state.get('total_ordering_cost', 0)
+    holding_cost_unit = st.session_state.get('holding_cost_per_unit', 0)
+    holding_rate = st.session_state.get('holding_rate', 0)
+    
+    # ================= CHECK FOR DISCOUNTS =================
+    # Check if user visited the discount page and selected a best offer
+    best_offer = st.session_state.get('best_offer_data', None)
+    
+    if best_offer:
+        # OVERRIDE VALUES WITH DISCOUNTED ONES
+        unit_price = best_offer.get('New Price', unit_price)
+        total_cost = best_offer.get('Total Cost', 0) # The discounted total cost
+        discount_rate = best_offer.get('Discount %', 0)
+        min_order_qty = best_offer.get('MOQ', 0)
+        best_status = best_offer.get('Status', 'Standard EOQ')
+        
+        # Recalculate holding cost based on NEW price
+        holding_cost_unit = unit_price * holding_rate
+        st.session_state['holding_cost_per_unit'] = holding_cost_unit # Update session state with new holding cost
+    else:
+        # No discount, calculate standard totals
+        discount_rate = 0
+        min_order_qty = 0
+        best_status = "Standard EOQ"
+        if holding_cost_unit > 0 and total_future_demand > 0 and ordering_cost > 0:
+            import math
+            eoq = math.sqrt((2 * ordering_cost * total_future_demand) / holding_cost_unit)
+            num_orders = total_future_demand / eoq
+            annual_holding_cost = holding_cost_unit * ((eoq / 2) + st.session_state.get('safety_stock', 0))
+            annual_ordering_cost = num_orders * ordering_cost
+            material_cost = unit_price * total_future_demand
+            total_cost = material_cost + annual_holding_cost + annual_ordering_cost
+        else:
+            eoq = 0
+
+    # 4. Supplier & Logistics
+    supplier_name = st.session_state.get('selected_supplier_name', 'N/A')
+    lead_time = st.session_state.get('supplier_lead_time', 0)
+    service_level_input = st.session_state.get('supplier_service_level', 0)
+    sigma_error = st.session_state.get('sigma_error', 0)
+    
+    # 5. Calculated Results
+    z_index = st.session_state.get('z_index', 0)
+    safety_stock = st.session_state.get('safety_stock', 0)
+    reorder_point = st.session_state.get('reorder_point', 0)
+    target_level = st.session_state.get('target_level', 0)
+    
+    # Recalculate EOQ specifically for display (in case it changed due to price change)
+    if holding_cost_unit > 0 and total_future_demand > 0 and ordering_cost > 0:
+        import math
+        eoq = math.sqrt((2 * ordering_cost * total_future_demand) / holding_cost_unit)
+        material_cost = unit_price * total_future_demand # Recalc material cost
+    else:
+        eoq = 0
+
+
+    # ================= LAYOUT =================
+
+    # --- ROW 1: FORECASTING PERFORMANCE ---
+    st.markdown("### 🤖 Forecasting Model Results")
+    
+    # (Using same style as before)
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.2);'>
+                <div style='font-size: 0.9rem;'>Total Future Demand in {purchasing_unit}s</div>
+                <div style='font-size: 1.8rem; font-weight: bold;'>{total_future_demand:,.0f}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%); padding: 10px; border-radius: 15px; text-align: center; color: #0d47a1; box-shadow: 0 4px 15px rgba(0,0,0,0.2);'>
+                <div style='font-size: 0.9rem;'>selected model</div>
+                <div style='font-size: 1.8rem; font-weight: bold;'>{selected_model}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%); padding: 10px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.2);'>
+                <div style='font-size: 0.9rem;'>Safety Stock in {purchasing_unit}s</div>
+                <div style='font-size: 1.8rem; font-weight: bold;'>{safety_stock:,.0f}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with col4:
+        # Highlight Total Cost if Discount is applied
+        cost_color = "#f6d365" # Default Orange
+        if best_offer:
+            cost_color = "#2ecc71" # Green if discounted
+            cost_label = "Total Cost (Discounted)"
+        else:
+            cost_label = "Total Annual Cost"
+
+        st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); padding: 10px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.2);'>
+                <div style='font-size: 1rem;'>{cost_label}</div>
+                <div style='font-size: 1.8rem; font-weight: bold;'>${total_cost:,.0f}</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    
+    # --- ROW 3: COST BREAKDOWN & SUPPLIER & POLICY (3 Cols) ---
+    col_left, col_middle, col_right = st.columns(3)
+
+    with col_left:
+        st.subheader("💰 Cost Breakdown")
+        cost_style = """
+            <div style="background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; margin-bottom: 10px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-size: 1.2rem; color: #555;">{title}</div>
+                </div>
+                <div style="font-size: 1.2rem; font-weight: bold; color: #155724;">{val}</div>
+            </div>
+        """
+        # Show the FINAL unit price (discounted or original)
+        st.markdown(cost_style.format(title="Unit Price", val=f"${unit_price:.2f} / {purchasing_unit}"), unsafe_allow_html=True)
+        st.markdown(cost_style.format(title="Holding Cost", val=f"${holding_cost_unit:.2f} / {purchasing_unit}"), unsafe_allow_html=True)
+        st.markdown(cost_style.format(title="Ordering Cost", val=f"${ordering_cost:.2f} / order"), unsafe_allow_html=True)
+        
+        # Material cost calculation
+        mat_cost_display = unit_price * total_future_demand
+        st.markdown(cost_style.format(title="Total Material Cost", val=f"${mat_cost_display:,.0f}"), unsafe_allow_html=True)
+
+    with col_middle:
+        st.subheader("🏭 Supplier & Logistics")
+        supplier_style = """
+            <div style="background-color: #ffffff; border: 1px solid #e0e0e0; padding: 15px; margin-bottom: 20px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 1.4rem; color: #555;">{title}</div>
+                <div style="font-size: 1.4rem; font-weight: bold; color: #1565C0;">{val}</div>
+            </div>
+        """
+        st.markdown(supplier_style.format(title="Supplier", val=supplier_name), unsafe_allow_html=True)
+        st.markdown(supplier_style.format(title="Demand Type", val=demand_type), unsafe_allow_html=True)
+        st.markdown(supplier_style.format(title="Lead Time", val=f"{lead_time:.1f}"), unsafe_allow_html=True)
+        st.markdown(supplier_style.format(title="Service Level", val=f"{service_level_input:.0%}"), unsafe_allow_html=True)
+
+    with col_right:
+        st.subheader("📦 Inventory Policy Recommendation")
+        
+        # DETERMINE POLICY TYPE
+        if target_level > 0:
+            policy_text = "Periodic Review (P, Q)"
+            display_level = target_level
+            level_name = "Order Up-to Level (S)"
+        else:
+            policy_text = "Continuous Review (Q, R)"
+            display_level = reorder_point
+            level_name = "Reorder Point (ROP)"
+        
+        st.markdown(f"""
+            <div style="text-align: center; padding: 10px; background-color: #e3f2fd; border-radius: 10px; border-top: 5px solid #2196f3; margin-bottom:15px;">
+                <div style="color: #1976d2; font-weight: bold; font-size: 1.2rem; margin-bottom: 10px;">Policy Type</div>
+                <div style="color: #333; font-size: 1.1rem;">{policy_text}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+            <div style="text-align: center; padding: 10px; background-color: #fff3e0; border-radius: 10px; border-top: 5px solid #ff9800;margin-bottom:15px;">
+                <div style="color: #f57c00; font-weight: bold; font-size: 1.2rem; margin-bottom: 10px;">{level_name}</div>
+                <div style="color: #333; font-size: 2rem; font-weight: bold;">{display_level:,.0f}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+            <div style="text-align: center; padding: 10px; background-color: #e8f5e9; border-radius: 10px; border-top: 5px solid #4caf50;margin-bottom:15px;">
+                <div style="color: #388e3c; font-weight: bold; font-size: 1.2rem; margin-bottom: 10px;">Order Quantity (Q)</div>
+                <div style="color: #333; font-size: 2rem; font-weight: bold;">{eoq:,.0f}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    # ================= FOOTER =================
+    col_left, col_middle, col_right = st.columns([1, 1, 1])
+
+    with col_left:
+        if st.button("← Back to Calculations", use_container_width=True):
+            st.session_state.page = "eoq_smooth4"
+            st.rerun()
+
+    with col_middle:
+        if st.button("📋 View Action Plan", use_container_width=True, type="primary"):
+            st.session_state.show_action_plan = True
+
+
+    # ================= ACTION PLAN POPUP =================
+    if st.session_state.get('show_action_plan', False):
+        @st.dialog("📋 Inventory Action Plan", width="large")
+        def show_action_plan_popup():
+            # Dynamic Text based on Discount Status
+            if best_offer:
+                discount_status = f"YES - Applied discount of {discount_rate}%"
+                price_text = f"Discounted Price: ${unit_price:.2f} / {purchasing_unit}"
+                moq_note = f"*(Adjusted for MOQ: {min_order_qty} units)" if best_status == "Adjusted to MOQ" else ""
+            else:
+                discount_status = "**NO** - Using standard pricing"
+                price_text = f"**Standard Price:** ${unit_price:.2f} / {purchasing_unit}"
+                moq_note = ""
+            
+            st.markdown(f"""
+            <style>
+                .big-title {{
+                    font-size: 1.5rem;
+                    font-weight: bold;
+                    margin-bottom: 10px;
+                }}
+                .section-label {{
+                    font-size: 1.2rem;
+                    font-weight: bold;
+                }}
+                .section-value {{
+                    font-size: 1.3rem;
+                }}
+                .number-highlight {{
+                    font-size: 1.5rem;
+                    font-weight: bold;
+                    color: #1565C0;
+                }}
+            </style>
+
+            <div class="big-title">Supplier Discount Applied: {discount_status}</div>
+
+            <hr>
+
+            <p><span class="section-label">🛡️ Policy Type:<br/></span> <span class="section-value">{policy_text}</span></p>
+
+            <p><span class="section-label">💲 Unit Price:<br/></span> <span class="section-value">{price_text}</span> <span style="font-size: 0.9rem;">{moq_note}</span></p>
+
+            <p><span class="section-label">🔔 Trigger Point (ROP):</span><br>
+            <span class="section-value">Place an order when <strong>Inventory Position</strong> drops to or below:</span> <span class="number-highlight">{display_level:,.0f} {purchasing_unit}s</span></p>
+
+            <p><span class="section-label">🚚 Action to Take:</span><br>
+            <span class="section-value">Order exactly:</span>
+            <span class="number-highlight">{eoq:,.0f} {purchasing_unit}s</span></p>
+
+            <p><span class="section-label">📦 Safety Stock:</span><br>
+            <span class="section-value">Always maintain:</span>
+            <span class="number-highlight">{safety_stock:,.0f} {purchasing_unit}s</span></p>
+
+
+            """, unsafe_allow_html=True)            
+
+            
+     
+            if st.button("Close", use_container_width=True, type="primary"):
+                st.session_state.show_action_plan = False
+                st.rerun()
+
+        show_action_plan_popup()
 
 
 #============================================================================================================================
 #================================================================================================================================================================
 #============================================================================================================================
+
+def eoq_erratic1_page():
+    st.markdown('<div class="big-title">Inventory Planning</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Unit Price, Holding Cost & Supplier Selection</div>', unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        # ================= RETRIEVE PRICE =================
+        unit_price = 0.0
+        
+        # Check if we have a forecasted price available
+        has_forecast = 'forecasted_price' in st.session_state and st.session_state.forecasted_price is not None
+
+        if has_forecast:
+            # Display the available forecasted price
+            st.markdown("""
+            <style>
+            /* Target the text inside st.info */
+            .stAlert p {
+                font-size: 22px !important;
+            }
+
+            /* Make the bold price value even larger and bolder */
+            .stAlert strong {
+                font-size: 28px !important;
+                font-weight: 800 !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
+            st.info(f"Forecasted Price Available: **${st.session_state.forecasted_price:.2f}**")            
+            
+        # Create the radio selection for the user
+        st.markdown("""
+        <style>
+        /* Target the radio button labels */
+        div[data-testid="stRadio"] > label > div[data-testid="stMarkdownContainer"] > p,
+        div[role="radiogroup"] > label > div[data-testid="stMarkdownContainer"] > p {
+            font-size: 24px !important;
+            font-weight: bold !important;
+            line-height: 1.5;
+
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # --- Radio selection ---
+        price_selection = st.radio(
+            "Please select a unit price in order to proceed with the calculations.",
+            ["Use Forecasted Price", "Enter Price Manually"],
+            horizontal=True
+        )
+
+        if price_selection == "Use Forecasted Price":
+            unit_price = st.session_state.forecasted_price
+        else:
+            unit_price = st.number_input(
+                "Enter Unit Price ($)",
+                min_value=0.0,
+                value=float(st.session_state.forecasted_price),
+                step=0.1
+            )
+        
+        # ================= SAVE UNIT PRICE =================
+        st.session_state['final_unit_price'] = unit_price
+
+        if 'future_steps' in st.session_state:
+            months_to_forecast = st.session_state.future_steps
+        else:
+            months_to_forecast = 3  
+
+
+    with col2:
+
+        # ================= REST OF YOUR CODE =================
+        if 'df_uploaded' not in st.session_state:
+            st.warning("You Should Upload File Firstly")
+            return
+
+        df = st.session_state['df_uploaded']
+
+        aggregated_data = aggregate_demand(df)
+
+
+        selected_model = "ARIMA"       
+        selected_time_domain = "daily" 
+
+        forecast_periods =  months_to_forecast
+
+        lookback = 12
+
+        test_data, test_forecast, forecast_df, metrics = run_forecast(
+            aggregated_data=aggregated_data,
+            time_domain=selected_time_domain,
+            model_name=selected_model,
+            forecast_periods=forecast_periods,
+            lookback=lookback
+        )
+
+        sigma_demand = calculate_sigma_demand(test_data["demand"].values)
+        sigma_error  = calculate_sigma_error(test_data["demand"].values, test_forecast)
+
+        # ================= SAVE SIGMA VALUES =================
+        st.session_state['sigma_demand'] = sigma_demand
+        st.session_state['sigma_error'] = sigma_error
+
+        future_forecast = st.session_state.get('future_forecast', None)
+        future_dates = st.session_state.get('future_dates', None)       
+        demand_type = st.session_state.get('demand_type_classification', None)
+
+        if future_forecast is None or future_dates is None:
+            st.warning("Please run the forecasting model first from the Forecasting page.")
+            return
+
+        if demand_type is None:
+            st.warning("Demand type classification is missing. Please go back to Data Analysis.")
+            return
+
+        # ================= CALCULATE AVERAGE LEAD TIME & SERVICE LEVEL FROM DATA =================
+        # Standardize column names
+        df_copy = df.copy()
+        df_copy.columns = df_copy.columns.str.lower().str.strip()
+        
+        # Initialize variables
+        avg_lead_time = None
+        avg_service_level = None
+        
+        # Check if 'lead time' column exists and calculate average (ignoring zeros and NaN)
+        if 'lead time' in df_copy.columns:
+            lead_time_values = df_copy['lead time'].replace(0, np.nan).dropna()
+            if len(lead_time_values) > 0:
+                avg_lead_time = lead_time_values.mean()
+                st.session_state['avg_lead_time_from_data'] = avg_lead_time
+        
+        # Check if 'service level' column exists and calculate average (ignoring zeros and NaN)
+        if 'service level' in df_copy.columns:
+            service_level_values = df_copy['service level'].replace(0, np.nan).dropna()
+            if len(service_level_values) > 0:
+                avg_service_level = service_level_values.mean()
+                st.session_state['avg_service_level_from_data'] = avg_service_level
+
+
+        total_next_year_demand = float(np.sum(future_forecast))
+        formatted_total = f"{total_next_year_demand:,.2f}"
+        next_year = future_dates[-1].year - 1
+
+        st.markdown(f"""
+                <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    padding: 27px; border-radius: 10px; text-align: center; color: white; margin-bottom: 15px;'>
+                    <h3 style='margin: 0;'>📊 Total Demand for the Forecasted Period:<br/> {formatted_total} Units</h3>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # ================= DISPLAY METRICS IN 2x2 GRID =================
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.markdown(f"""
+                <div style='background-color: #e8f5e9; padding: 15px; border-radius: 8px; text-align: center;   margin-bottom: 20px; '>
+                    <strong style="font-size:20px ;" >Sigma Demand = {sigma_demand:.2f}</strong>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+                <div style='background-color: #fff3e0; padding: 15px; border-radius: 8px; text-align: center;    margin-bottom: 20px;'>
+                    <strong style="font-size:20px ;">Sigma Error = {sigma_error:.2f}</strong>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Second row for Lead Time and Service Level
+        col3, col4 = st.columns([1, 1])
+        
+        with col3:
+            if avg_lead_time is not None:
+                st.markdown(f"""
+                    <div style='background-color: #e3f2fd; padding: 15px; border-radius: 8px; text-align: center;'>
+                        <strong style="font-size:20px ;">Avg Lead Time = {avg_lead_time:.2f}</strong>
+                    </div>
+                """, unsafe_allow_html=True)
+        
+        with col4:
+            if avg_service_level is not None:
+                st.markdown(f"""
+                    <div style='background-color: #f3e5f5; padding: 15px; border-radius: 8px; text-align: center;'>
+                        <strong style="font-size:20px ;">Avg Service Level = {avg_service_level:.2f}</strong>
+                    </div>
+                """, unsafe_allow_html=True)
+
+
+    is_smooth_demand = False
+    if isinstance(demand_type, str) and "smooth" in demand_type.lower():
+        is_smooth_demand = True
+
+    # ================= Layout ============================================================
+    if isinstance(demand_type, str) and "erratic" in demand_type.lower():
+                # ================= SUPPLIER & SAFETY STOCK =================
+        st.markdown("### Supplier Selection & Safety Stock")
+
+        # 1. Load Supplier Database
+        supplier_db_path = os.path.join("Database", "Suppliers Info.xlsx")
+        
+        # Initialize variables
+        lead_time_input = 0
+        service_level_input = 0
+        selected_supplier_name = "None"
+
+        if not os.path.exists(supplier_db_path):
+            st.warning(f"Supplier database not found at: {supplier_db_path}")
+            # Allow user to enter manually if file missing
+            col1, col2 = st.columns(2)
+            with col1:
+                lead_time_input = st.number_input("Enter Lead Time (Days)", min_value=1, value=30)
+                st.session_state['supplier_lead_time'] = lead_time_input
+            with col2:
+                service_level_input = st.number_input("Enter Service Level (e.g., 0.95)", min_value=0.0, max_value=1.0, value=0.95)
+                st.session_state['supplier_service_level'] = service_level_input
+                
+        else:
+            try:
+                df_suppliers = pd.read_excel(supplier_db_path)
+                
+                # Clean column names
+                df_suppliers.columns = df_suppliers.columns.str.strip()
+                
+                # Ensure required columns exist
+                needed_cols = ['Supplier', 'Lead Time (L)', 'Service Level', 'Defect rate %', 'On-time delivery %']
+                if not all(col in df_suppliers.columns for col in needed_cols):
+                    st.error("Suppliers Excel is missing columns: 'Supplier', 'Lead Time (L)', 'Service Level', 'Defect rate %', 'On-time delivery %'")
+                else:
+                    # ================= MAIN LAYOUT =================
+                    # Split screen into two equal columns: [1, 1]
+                    col_left, col_right = st.columns([1, 1])
+                    
+                    # ================= LEFT COLUMN =================
+                    with col_left:
+                        # Row 1: Selectbox
+                        selected_supplier_name = st.selectbox(
+                            "Select Supplier", 
+                            options=df_suppliers['Supplier'].tolist(),
+                            label_visibility="visible",
+                            key="supplier_selector" # Added key
+                        )
+                        
+                        # Row 2: "Extracted from database" message
+                        # We calculate this immediately to show the message
+                        supplier_info = df_suppliers[df_suppliers['Supplier'] == selected_supplier_name].iloc[0]
+                        
+                        # Extract values
+                        lead_time_input = supplier_info['Lead Time (L)']
+                        sl_val = supplier_info['Service Level']
+                        service_level_input = sl_val
+
+                        # ================= SAVE SUPPLIER DATA =================
+                        st.session_state['selected_supplier_name'] = selected_supplier_name
+                        st.session_state['supplier_lead_time'] = lead_time_input
+                        st.session_state['supplier_service_level'] = service_level_input
+                        st.session_state['supplier_defect_rate'] = supplier_info['Defect rate %']
+                        st.session_state['supplier_ontime_delivery'] = supplier_info['On-time delivery %']
+
+
+                        # Columns for the inner layout
+                        c_r1_c1, c_r1_c2, c_r2_c3, c_r2_c24 = st.columns(4)
+
+                        # Helper function for individual items inside the box
+                        def kpi_box(title, value, label):
+                            return f"""
+                                <div style="text-align: center;">
+                                    <div style="font-size: 1rem; color: #666; margin-bottom: 5px;">{title}</div>
+                                    <div style="font-size: 1.8rem; font-weight: bold; color: #1565C0; margin-bottom: 8px;">{value}</div>
+                                </div>
+                            """
+
+                        with c_r1_c1:
+                            st.markdown(kpi_box(
+                                "Lead Time (L)", 
+                                f"{supplier_info['Lead Time (L)']}", 
+                                "Days"
+                            ), unsafe_allow_html=True)
+                        
+                        with c_r1_c2:
+                            # Handling display if value is 0.95 vs 95 based on assumption. Assuming direct display.
+                            st.markdown(kpi_box(
+                                "Service Level", 
+                                f"{supplier_info['Service Level']}", 
+                                "Target"
+                            ), unsafe_allow_html=True)
+
+                        with c_r2_c3:
+                            st.markdown(kpi_box(
+                                "Defect Rate", 
+                                f"{supplier_info['Defect rate %']}%", 
+                                "Quality"
+                            ), unsafe_allow_html=True)
+
+                        with c_r2_c24:
+                            st.markdown(kpi_box(
+                                "On-Time Delivery", 
+                                f"{supplier_info['On-time delivery %']*100}%", 
+                                "Performance"
+                            ), unsafe_allow_html=True)
+
+                        # Close the outer container div
+                        st.markdown("</div>", unsafe_allow_html=True)
+
+                    # ================= RIGHT COLUMN =================
+                    with col_right:
+                        st.markdown("### Holding Cost Parameters")
+                        
+                        # Create columns: [1, 1] splits the screen into two equal halves
+                        col_input, col_result = st.columns([1, 1])
+
+                        with col_input:
+                            # Input Field (Left Column)
+                            holding_rate = st.number_input(
+                                "Holding Rate (%)", 
+                                min_value=0.0, 
+                                max_value=1.0, 
+                                value=0.2, 
+                                step=0.01, 
+                                format="%.2f",
+                                help="Enter the holding cost as a decimal (e.g., 0.20 for 20%)"
+                            )
+
+                        with col_result:
+                            # Result Display (Right Column)
+                            # FIX: Use 'final_unit_price' instead of 'forecasted_price'
+                            if 'final_unit_price' in st.session_state:
+                                unit_price = st.session_state.final_unit_price
+                                holding_cost_per_unit = unit_price * holding_rate
+                                
+                                st.markdown(f"""
+                                    <div style="padding: 1rem; background-color: #e3f2fd; border-left: 5px solid #2196f3; border-radius: 4px; font-size:20px;">
+                                        <b>Holding Cost per Unit:</b> $
+                                            <span style="color: red; font-size:80x;">{holding_cost_per_unit:.2f} <span> 
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                # Save to session state for EOQ calculation
+                                st.session_state.holding_cost_per_unit = holding_cost_per_unit
+                            else:
+                                st.warning("Unit price not found. Cannot calculate holding cost per unit.")
+                                st.session_state.holding_cost_per_unit = 0.0
+
+            except Exception as e:
+                st.error(f"Error reading Supplier database: {e}")
+        
+        # 4. Convert Service Level to Z-Index (Normal Distribution)
+        from scipy.stats import norm
+        
+        # ppf = Percent Point Function (Inverse of CDF)
+        # Ensure service_level_input is valid for norm.ppf (between 0 and 1 exclusive)
+        if service_level_input <= 0: service_level_input = 0.0001
+        if service_level_input >= 1: service_level_input = 0.9999
+        
+        z_index = norm.ppf(service_level_input)
+
+        # 5. Calculate Safety Stock
+        # SS = Z * sqrt(L) * sigma_error
+        # (sigma_error was calculated earlier in your script)
+        safety_stock = z_index * np.sqrt(lead_time_input) * sigma_error
+        
+        # 6. Calculate Reorder Point (ROP)
+        # ROP = (Avg Demand / Periods) * Lead Time + Safety Stock
+        # We calculate average demand per day (or period) based on your 'months_to_forecast'
+        annual_demand = float(np.sum(st.session_state.get('future_forecast', [0])))
+        avg_demand_per_period = annual_demand / months_to_forecast
+        
+        # If lead time is in days, and demand is monthly, we adjust:
+        # Assuming 'lead_time_input' is in the same unit as your forecast frequency (e.g., months)
+        # If lead time is in DAYS and you forecast MONTHLY, you need to divide by 30 (approx).
+        # For this code, I assume Lead Time matches the forecast period unit.
+        
+        reorder_point = (avg_demand_per_period * lead_time_input) + safety_stock
+
+        # ================= SAVE FINAL CALCULATIONS =================
+        st.session_state['z_index'] = z_index
+        st.session_state['safety_stock'] = safety_stock
+        st.session_state['reorder_point'] = reorder_point
+        st.session_state['avg_demand_per_period'] = avg_demand_per_period
+        st.session_state['holding_rate'] = holding_rate
+
+
+
+        # ================= NAVIGATION =================
+        col_left, col_middle, col_right = st.columns([1, 1, 1])
+        
+        with col_left:
+            if st.button("← Back", use_container_width=True):
+                st.session_state.page = "recommendation"
+                st.rerun()
+
+        with col_right:
+            if st.button("Next → Sefety Stock & Re-Ordering Point", type="primary", use_container_width=True):
+                st.session_state.page = "eoq_erratic2"
+                st.rerun()
+
+
+
+
+def eoq_erratic2_page():
+    st.markdown('<div class="big-title">Inventory Planning</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Safety Stock & Re-Ordering Point Calculation</div>', unsafe_allow_html=True)
+
+    # ─────────────────────────────────────────────────────────────
+    # 1. CORRECTED RETRIEVE DATA FROM SESSION STATE
+    # ─────────────────────────────────────────────────────────────
+    future_forecast = st.session_state.get('future_forecast', None)
+    total_next_year_demand = float(np.sum(future_forecast))
+    formatted_total = f"{total_next_year_demand:,.2f}"
+
+    # Basic Inputs
+    unit_price = st.session_state.get('final_unit_price', 0.0)
+    holding_cost = st.session_state.get('holding_cost_per_unit', 0.0)
+    
+    # Supplier Info
+    supplier_name = st.session_state.get('selected_supplier_name', "Not Selected")
+    
+    # Variable name used here is 'lead_time'
+    lead_time = st.session_state.get('supplier_lead_time', 0)
+    
+    service_level = st.session_state.get('supplier_service_level', 0)
+    
+    # Metrics & Stats
+    sigma_error = st.session_state.get('sigma_error', 0.0)
+    sigma_demand = st.session_state.get('sigma_demand', 0.0)
+    
+    # Calculated Results
+    z_index = st.session_state.get('z_index', 0.0)
+    safety_stock = st.session_state.get('safety_stock', 0.0)
+    reorder_point = st.session_state.get('reorder_point', 0.0)
+    avg_demand = st.session_state.get('avg_demand_per_period', 0.0)
+
+    # Check if data exists
+    if unit_price == 0.0:
+        st.warning("No inventory data found. Please ensure you ran the calculations on the previous page.")
+        return
+
+    # ─────────────────────────────────────────────────────────────
+    # 2. DISPLAY DATA IN A 2x2 GRID LAYOUT
+    # ─────────────────────────────────────────────────────────────
+
+
+    st.markdown("### Cost & Demand Inputs")
+    st.markdown("""
+    <style>
+    .info-card {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 14px 16px;
+        border: 1px solid #e0e0e0;
+        box-shadow: 0 2px 2px #1565C0;
+        margin-bottom: 12px;
+    }
+    .info-title {
+        font-size: 20px;
+        margin-bottom: 4px;
+    }
+    .info-value {
+        font-size: 25px;
+        font-weight: 600;
+        color: #1565C0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.markdown(f"""
+        <div class="info-card">
+            <div class="info-title">💲 Unit Price</div>
+            <div class="info-value">${unit_price:.2f}</div>
+        </div>
+        <div class="info-card">
+            <div class="info-title">📦 Total Demand</div>
+            <div class="info-value">{formatted_total}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f"""
+        <div class="info-card">
+            <div class="info-title">📊 Avg Demand / Period</div>
+            <div class="info-value">{avg_demand:.2f}</div>
+        </div>
+        <div class="info-card">
+            <div class="info-title">🏷 Holding Cost / Unit</div>
+            <div class="info-value">${holding_cost:.2f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        st.markdown(f"""
+        <div class="info-card">
+            <div class="info-title">📉 Sigma Error</div>
+            <div class="info-value">{sigma_error:.2f}</div>
+        </div>
+        <div class="info-card">
+            <div class="info-title">📐 Z-Index</div>
+            <div class="info-value">{z_index:.2f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col4:
+        st.markdown(f"""
+        <div class="info-card">
+            <div class="info-title">⏱ Lead Time</div>
+            <div class="info-value">{lead_time:.2f}</div>
+        </div>
+        <div class="info-card">
+            <div class="info-title">🏭 Supplier</div>
+            <div class="info-value">{supplier_name}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+
+
+    def cost_box(title, value, formula, is_total=False):
+        bg_color = "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)" 
+        border_color = "#1565C0" if is_total else "#1565C0"
+        font_color = "#0D47A1" if is_total else "#1565C0"
+        
+        return f"""
+            <div style="
+                background-color: {bg_color};
+                border: 1px solid {border_color};
+                border-radius: 20px;
+                padding: 15px;
+                text-align: center;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                margin-bottom: 20px;
+            ">
+                <div style="font-size: 1.5rem; color: #666; margin-bottom: 5px;">{title}</div>
+                <div style="font-size: 1.8rem; font-weight: bold; color: {font_color}; margin-bottom: 8px;">{value}</div>
+                <div style="font-size: 1rem; background: rgba(0,0,0,0.05); padding: 4px 8px; border-radius: 4px;">{formula}</div>
+            </div>
+        """
+
+    st.markdown("### Safety Stock & Reorder Point Breakdown")
+
+    col1, col2, col3 = st.columns([1,2,2])
+
+    with col1:
+        if 'review_period_p' not in st.session_state:
+            st.session_state['review_period_p'] = 1.0  
+
+        # Number input: Review Period
+        review_period_p = st.number_input(
+            "Review Period (P) in Months",
+            min_value=0.0,
+            max_value=12.0,
+            value=float(st.session_state['review_period_p']),
+            step=0.5,
+            key="p_input_widget"
+        )
+        st.session_state['review_period_p'] = review_period_p
+
+        # --- THE MISSING STEP: RECALCULATION ---
+        # We recalculate SS and ROP based on the new P input
+        new_safety_stock = z_index * sigma_error * np.sqrt(lead_time + review_period_p)
+        new_reorder_point = (avg_demand * lead_time) + (avg_demand * review_period_p) + new_safety_stock
+        
+        # Update variables for display
+        safety_stock = new_safety_stock
+        reorder_point_erratic = new_reorder_point
+
+        with col2:
+            # Now this will update live when P changes!
+            formula_text_ss = f"Z: {z_index:.2f} × √({lead_time} + {review_period_p}): {np.sqrt(lead_time + review_period_p):.2f} × σ: {sigma_error:.2f}"
+            
+            st.markdown(cost_box(
+                "Safety Stock (SS)", 
+                f"{safety_stock:.2f}", 
+                formula_text_ss
+            ), unsafe_allow_html=True)
+
+        with col3:
+            # For Periodic Review, ROP usually covers Lead Time + Review Period
+            formula_text_rop = f"(LT+P)×Avg Demand + SS"
+
+            st.markdown(cost_box(
+                "Order up-to level", 
+                f"{reorder_point_erratic:.2f}", 
+                formula_text_rop
+            ), unsafe_allow_html=True) 
+
+        # Save the NEW calculated values back to session state for the next pages
+        st.session_state.safety_stock = safety_stock
+        st.session_state.reorder_point_erratic = reorder_point_erratic       
+            
+    
+    col_left, col_middle, col_right = st.columns([1, 1, 1])
+    
+    with col_left:
+        if st.button("← Back", use_container_width=True):
+            st.session_state.page = "eoq_erratic1"
+            st.rerun()
+
+    with col_right:
+        if st.button("Next → Ordering Cost Determination", type="primary", use_container_width=True):
+            st.session_state.page = "eoq_erratic3"
+            st.rerun()
+
+
+
+
+def eoq_erratic3_page():
+    st.markdown('<div class="big-title">Inventory Planning</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Ordering Cost Determination</div>', unsafe_allow_html=True)
+     
+
+    # 1. Ask User how they want to provide Ordering Cost
+    cost_method = st.selectbox(
+        "Do you know the Total Ordering Cost?",
+        options=[
+            "Yes, I know the total cost",
+            "Yes, I know approximate cost of each main category",
+            "No, calculate from Incoterms (detailed)"
+        ],
+        key="cost_method_selector"
+    )
+
+    # Initialize total_ordering_cost
+    total_ordering_cost = 0.0
+
+    # ──────────────────────────────────────────────────────────────
+    if cost_method == "Yes, I know the total cost":
+        # ── Option 1: Direct total input ──
+        known_cost = st.session_state.get('total_ordering_cost', 0.0)
+        
+        input_val = st.number_input(
+            "Enter Total Ordering Cost (per Order)",
+            min_value=0.0,
+            value=known_cost,
+            step=1.0,
+            key="input_total_ordering_cost",
+            help="Enter the estimated total cost per order"
+        )
+        total_ordering_cost = input_val
+
+    elif cost_method == "Yes, I know approximate cost of each main category":
+            st.info("Enter approximate values for each major cost category (per order)")
+
+            col_1, col_2 = st.columns(2)
+
+            with col_1:
+                # Sub-columns to keep the inputs compact
+                sub_col1, sub_col2 = st.columns(2)
+
+                with sub_col1:
+                    admin_cost = st.number_input(
+                        "Administrative Costs",
+                        min_value=0.0,
+                        value=st.session_state.get('cat_admin', 0.0),
+                        step=1.0,
+                        key="cat_admin_input",
+                        help="All administrative & paperwork related costs"
+                    )
+
+                    internal_cost = st.number_input(
+                        "Internal Setup / Processing",
+                        min_value=0.0,
+                        value=st.session_state.get('cat_internal', 0.0),
+                        step=1.0,
+                        key="cat_internal_input"
+                    )
+
+                with sub_col2:
+                    receiving_cost = st.number_input(
+                        "Receiving / Inspection",
+                        min_value=0.0,
+                        value=st.session_state.get('cat_receiving', 0.0),
+                        step=1.0,
+                        key="cat_receiving_input"
+                    )
+
+                    transport_cost = st.number_input(
+                        "Transportation / Freight",
+                        min_value=0.0,
+                        value=st.session_state.get('cat_transport', 0.0),
+                        step=1.0,
+                        key="cat_transport_input",
+                        help="Total transportation cost depending on Incoterms"
+                    )
+
+            with col_2:
+                # Logic: Demand is erratic, so type is fixed to Blanket
+                purchasing_type = "Blanket"
+                st.warning(f"Demand Type: **Erratic**")
+                st.info(f"Purchasing Type fixed to: **{purchasing_type}**")
+
+            # Calculate total
+            total_ordering_cost = admin_cost + internal_cost + receiving_cost + transport_cost
+
+            # Save values to session state
+            st.session_state.cat_admin = admin_cost
+            st.session_state.cat_internal = internal_cost
+            st.session_state.cat_receiving = receiving_cost
+            st.session_state.cat_transport = transport_cost
+
+    else:
+
+
+# ================= HELPER FUNCTION TO SAVE STATE =================
+        def save_input(widget_key):
+            new_value = st.session_state[widget_key]
+            st.session_state[f"storage_{widget_key}"] = new_value
+
+        # ================= SETUP & DATA LOADING =================
+        # Reduced to 2 columns since we no longer need the Purchasing Type radio
+        col_select1, col_select2 , col_select3 = st.columns(3)
+
+        # 1. Select Origin & Load Data
+        with col_select1:
+            purchasing_origin = st.radio(
+                "Type of Purchase",
+                options=["Local", "Foreign"],
+                horizontal=True,
+                key="purchasing_origin_select"
+            )
+
+            sheet_name = "local" if purchasing_origin == "Local" else "foreign"
+
+            db_path = os.path.join("Database", "Ordering Cost Components.xlsx")
+            
+            if not os.path.exists(db_path):
+                st.error(f"Database file not found at: {db_path}")
+                st.stop()
+
+            try:
+                df = pd.read_excel(db_path, sheet_name=sheet_name)
+                clean_cols = {col: col.strip().replace("_", " ") for col in df.columns}
+                df = df.rename(columns=clean_cols)
+                
+                needed_headers = ['cost type', 'components', 'Routine', 'Blanket', 'Contract']
+                found_mapping = {}
+                for needed in needed_headers:
+                    match = next((col for col in df.columns if col.lower() == needed.lower()), None)
+                    if match: found_mapping[needed] = match
+                
+                if len(found_mapping) < 5:
+                    st.error(f"Missing required columns in sheet '{sheet_name}'")
+                    st.stop()
+                    
+                df = df.rename(columns=found_mapping)
+                
+            except Exception as e:
+                st.error(f"Error reading sheet '{sheet_name}': {e}")
+                st.stop()
+
+        # 2. Select Transport Method & Fixed Purchasing Type
+        with col_select2:
+            transport_options = ["EXW", "FOB", "CIF"]
+            if 'prev_transport' not in st.session_state:
+                st.session_state.prev_transport = transport_options[0]
+                
+            prev = st.session_state.prev_transport
+            selected_transport = st.selectbox(
+                "Select Transportation Method",
+                options=transport_options,
+                key="transport_select",
+                index=transport_options.index(prev) if prev in transport_options else 0
+            )
+            
+            if selected_transport != prev:
+                st.session_state.prev_transport = selected_transport
+        with col_select3:
+            # FIXED LOGIC: Purchasing Type is now hardcoded to Blanket
+            purchasing_type = "Blanket"
+            st.info(f"Demand Type: Erratic | Purchasing Type: **{purchasing_type}**")
+
+        # ================= LOGIC: DROPDOWN & DYNAMIC FIELDS =================
+
+        fixed_cost_types = ["Administrative", "Internal Setup", "receiving", selected_transport]
+
+        col_selector, col_inputs = st.columns([1, 4])
+
+        with col_selector:
+            st.markdown("### Select Cost Type")
+            selected_cost_type = st.selectbox(
+                "Choose a category to edit:",
+                options=fixed_cost_types,
+                key="cost_type_selector",
+                label_visibility="collapsed"
+            )
+            st.info(f"Editing: **{selected_cost_type}**")
+
+        with col_inputs:
+            st.markdown(f"### {selected_cost_type} Components")
+            group_df = df[df['cost type'] == selected_cost_type].copy()
+
+            if group_df.empty:
+                st.warning("No components found for this selection.")
+            else:
+                components_list = group_df.to_dict('records')
+                
+                for i in range(0, len(components_list), 4):
+                    cols = st.columns(4)
+                    for j in range(4):
+                        if i + j < len(components_list):
+                            item = components_list[i + j]
+                            
+                            with cols[j]:
+                                comp_name = item['components']
+                                # Multiplier is now pulled strictly from the 'Blanket' column
+                                multiplier = item[purchasing_type]
+
+                                # Key now includes 'Blanket' as part of the unique identifier
+                                widget_key = f"cost_{selected_transport}_{comp_name}_{purchasing_type}_{purchasing_origin}_widget"
+                                storage_key = f"storage_{widget_key}"
+
+                                current_value = st.session_state.get(storage_key, 0.0)
+
+                                input_val = st.number_input(
+                                    f"{comp_name} (×{multiplier})",
+                                    min_value=0.0,
+                                    value=float(current_value),
+                                    step=1.0,
+                                    key=widget_key,
+                                    on_change=save_input,
+                                    args=(widget_key,)
+                                )
+
+                                calculated_line = input_val * multiplier
+                                
+                                st.markdown(f"""
+                                    <div style="text-align:right; color:#1565C0; font-weight:bold; font-size:0.85rem; margin-top:5px; margin-bottom:15px;">
+                                        Subtotal: ${calculated_line:.2f}
+                                    </div>
+                                """, unsafe_allow_html=True)                                
+                                
+                                        # ================= CALCULATE GRAND TOTAL =================
+        # We need to sum up ALL cost types, not just the one selected.
+        total_ordering_cost = 0.0
+
+        # Iterate through ALL available cost types defined
+        for cost_type in fixed_cost_types:
+            # Filter the main dataframe for this type
+            type_df = df[df['cost type'] == cost_type]
+            
+            if not type_df.empty:
+                components_list = type_df.to_dict('records')
+                for item in components_list:
+                    comp_name = item['components']
+                    multiplier = item[purchasing_type]
+                    
+                    # Construct the SAME key used in the input generation
+                    widget_key = f"cost_{selected_transport}_{comp_name}_{purchasing_type}_{purchasing_origin}_widget"
+                    storage_key = f"storage_{widget_key}"
+                    
+                    # Get the saved value
+                    saved_val = st.session_state.get(storage_key, 0.0)
+                    
+                    # Add to total
+                    total_ordering_cost += (saved_val * multiplier)
+
+        # ================= DISPLAY TOTAL =================
+
+    st.markdown('<hr class="custom-divider">', unsafe_allow_html=True)
+
+
+    # Always update session state at the end
+    st.session_state.total_ordering_cost = total_ordering_cost    
+
+
+
+    col_left, col_middle, col_right = st.columns([1, 1, 1])
+    
+    with col_left:
+        if st.button("← Back", use_container_width=True):
+            st.session_state.page = "eoq_erratic2"
+            st.rerun()
+
+    with col_middle:
+        st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                padding: -50px; border-radius: 10px; text-align: center; color: white; margin-bottom: 10px; font-weight:bold;'>
+                <h2 style='margin: 0; font-size: 1rem;'>Total Ordering Cost: ${total_ordering_cost:,.2f}</h2>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with col_right:
+        if st.button("Next → EOQ & Total Cost Calculation", type="primary", use_container_width=True):
+            st.session_state.page = "eoq_erratic4"
+            st.rerun()
+
+
+def eoq_erratic4_page():
+    st.markdown('<div class="big-title">Inventory Planning</div>', unsafe_allow_html=True)
+
+    future_forecast = st.session_state.get('future_forecast', None)
+    total_next_year_demand = float(np.sum(future_forecast)) if future_forecast is not None else 0.0
+    formatted_total = f"{total_next_year_demand:,.2f}"
+
+
+    review_period_p = st.session_state.get('review_period_p', 0.0)   
+    reorder_point_erratic = st.session_state.get('reorder_point_erratic', 0.0)
+    # Basic Inputs
+    unit_price = st.session_state.get('final_unit_price', 0.0)
+    holding_cost = st.session_state.get('holding_cost_per_unit', 0.0)
+    
+    # Supplier Info
+    supplier_name = st.session_state.get('selected_supplier_name', "Not Selected")
+    lead_time = st.session_state.get('supplier_lead_time', 0)
+    service_level = st.session_state.get('supplier_service_level', 0)
+    
+    # Metrics & Stats
+    sigma_error = st.session_state.get('sigma_error', 0.0)
+    sigma_demand = st.session_state.get('sigma_demand', 0.0)
+    z_index = st.session_state.get('z_index', 0.0)
+    
+    # Previous Calculations
+    safety_stock = st.session_state.get('safety_stock', 0.0)
+    # Note: 'reorder_point' from the previous page effectively acts as the 'Order up-to level' for Periodic Review
+    order_up_to_level = st.session_state.get('reorder_point', 0.0)
+    avg_demand = st.session_state.get('avg_demand_per_period', 0.0)
+
+    total_ordering_cost = st.session_state.get('total_ordering_cost', 0.0)
+    holding_rate = st.session_state.get('holding_rate', 0.0)
+
+
+    # ================= CALCULATIONS SECTION =================
+    st.markdown("### EOQ & Total Cost Calculation")
+
+    # 1. Calculate Standard EOQ for Reference
+    try:
+        annual_demand = total_next_year_demand
+        ordering_cost = total_ordering_cost
+        holding_cost_per_unit = holding_cost
+
+        if ordering_cost > 0 and annual_demand > 0 and holding_cost_per_unit > 0:
+            import math
+            
+            # EOQ = sqrt( (2 * S * D) / H )
+            eoq = math.sqrt((2 * ordering_cost * annual_demand) / holding_cost_per_unit)
+            
+            # --- TOTAL COST COMPONENTS ---
+
+            # --- DISPLAY EOQ & TOTAL COST RESULTS ---
+            
+            col1, col2,col3 = st.columns([1,2,2])
+
+            with col3:
+                st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); text-align: center; color: white;">
+                        <h4 style="margin: 0; font-size: 30px;">Economical Order Quantity (EOQ): <br/>{eoq:.2f} Units</h4>
+
+                    </div>
+                """, unsafe_allow_html=True)
+
+            with col1:
+                st.markdown(
+                    """
+                    <style>
+                    /* Label text */
+                    label[data-testid="stWidgetLabel"] > div {
+                        font-size: 20px !important;
+                        font-weight: 600;
+                    }
+
+                    /* Number input box text */
+                    input[type="number"] {
+                        font-size: 20px !important;
+                        height: 45px;
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                # 2. Input: Inventory Position
+                inventory_position = st.number_input(
+                    "Current Inventory Position (I)",
+                    min_value=0.0,
+                    value=0.0,
+                    step=1.0,
+                    help="Current stock + On-order units - Backorders"
+                )
+
+            with col2:
+                # --- CALCULATION ---
+                
+                # Recalculate Order Up-to Level (S) based on current P input
+                # S = d * (L + P) + Z * sigma * sqrt(L + P)
+                
+                # Calculate Protection Interval (Lead Time + Review Period)
+                protection_interval = lead_time + review_period_p
+                
+                # Recalculate Safety Stock for this interval
+                ss_dynamic = z_index * sigma_error * np.sqrt(protection_interval)
+                
+                # Recalculate Order Up-to Level (Target Level)
+                # Demand during protection interval
+                demand_during_interval = avg_demand * protection_interval
+                target_level = demand_during_interval + ss_dynamic
+
+                # Calculate Order Quantity (Q)
+                order_quantity = target_level - inventory_position
+                
+                # Handle negative result (no order needed)
+                if order_quantity < 0:
+                    order_quantity = 0.0
+                    order_status = "No Order Needed (I > Target)"
+                    box_bg = "#E8F5E9" # Greenish
+                else:
+                    order_status = "Place Order"
+                    box_bg = "#FFF3E0" # Orangeish
+
+                # Display Result
+                st.markdown(f"""
+                    <div style="
+                        background-color: {box_bg};
+                        border: 2px solid #1565C0;
+                        border-radius: 15px;
+                        padding: 10px;
+                        text-align: center;
+                        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                    ">
+                        <div style="font-size: 1.1rem; color: #555; margin-bottom: 10px;">
+                            Order up-to level({target_level:.2f}) - Inventory Position({inventory_position:.2f})
+                        </div>
+                        <div style="font-size: 1.5rem; font-weight: bold; color: #1565C0; margin-bottom: 5px;">
+                            Order Quantity = <span style="font-size: 2rem;">{order_quantity:.2f}</span> Units
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                # Save these specific calculations to session state in case needed on next page
+                st.session_state['final_order_quantity'] = order_quantity
+                st.session_state['target_level'] = target_level
+
+            st.markdown('<hr class="custom-divider">', unsafe_allow_html=True)
+
+            # --- COST BREAKDOWN ---
+            def cost_box(title, value, formula, is_total=False):
+                bg_color = "#E3F2FD" if is_total else "#F8F9FA"
+                font_color = "#0D47A1" if is_total else "#1565C0"
+                return f"""
+                    <div style="background-color: {bg_color}; border-radius: 10px; padding: 15px; text-align: center; border: 1px solid #e0e0e0; box-shadow: 0 2px 2px #1565C0; height: 100%; display: flex; flex-direction: column; justify-content: center; margin-bottom:20px">
+                        <div style="font-size: 1.2rem; color: #666; margin-bottom: 5px;">{title}</div>
+                        <div style="font-size: 1.8rem; font-weight: bold; color: {font_color}; margin-bottom: 8px;">{value}</div>
+                        <div style="font-size: 1rem; background: rgba(0,0,0,0.05); padding: 4px 8px; border-radius: 4px;">{formula}</div>
+                    </div>
+                """
+
+            if 'future_steps' in st.session_state:
+                months_to_forecast = st.session_state.future_steps
+            else:
+                months_to_forecast = 3
+
+
+            purchase_cost_batch = unit_price * order_quantity
+            num_orders = annual_demand / eoq
+            total_ordering_cost_calc = (months_to_forecast / review_period_p) * ordering_cost
+            # Note: For Periodic Review, Cycle stock is often approximated as (Demand during Review Interval)/2
+            # but using EOQ/2 is standard for Total Cost comparison in hybrid models.
+            total_holding_cost = holding_cost_per_unit * ((order_quantity / 2) + safety_stock)
+            total_cost = purchase_cost_batch + total_ordering_cost_calc + total_holding_cost
+
+
+            col1, col2, col3 = st.columns([1, 1, 1])
+            
+            with col1:
+                st.markdown(cost_box("Purchase Cost", f"${purchase_cost_batch:,.2f}", f"unit price (${unit_price:.2f}) × order quantity({order_quantity:.2f})"), unsafe_allow_html=True)
+            with col2:
+                st.markdown(cost_box("Ordering Cost", f"${total_ordering_cost_calc:,.2f}", f"no. of period forecasted({months_to_forecast:.2f}) / review period({review_period_p:.2f})<br/> × order cost (${ordering_cost:.2f})"), unsafe_allow_html=True)
+            with col3:
+                st.markdown(cost_box("Holding Cost", f" ${total_holding_cost:,.2f}", f"holding cost per unit(${holding_cost_per_unit:.2f}) × <br/>(order quantity({order_quantity:.2f})/2 + SS({safety_stock:.2f}))"), unsafe_allow_html=True)
+
+            st.markdown("")
+            col4, col5, col6 = st.columns([1, 5, 1])
+            with col5:
+                st.markdown(cost_box("Total Cost", f"${total_cost:,.2f}", "Sum of All Costs", is_total=True), unsafe_allow_html=True)
+
+        else:
+            st.warning("Cannot calculate EOQ. Please ensure Demand, Ordering Cost, and Holding Rate are > 0.")
+            # Set defaults to avoid crash later
+            eoq = 0
+            total_cost = 0
+
+    except Exception as e:
+        st.error(f"Error in calculations: {e}")
+        eoq = 0
+        total_cost = 0
+
+
+    # ================= NAVIGATION =================
+
+    col_left, col_middle, col_right = st.columns([1, 1, 1])
+    
+    with col_left:
+        if st.button("← Back", use_container_width=True):
+            st.session_state.page = "eoq_erratic3"
+            st.rerun()
+
+    with col_right:
+        if st.button("Suppliers Dashboard", type="primary", use_container_width=True):
+            st.session_state.page = "supplier report"
+            st.rerun()
+
+    with col_middle:
+        if st.button("Final Summary", type="primary", use_container_width=True):
+            st.session_state.page = "erratic_final_summary"
+            st.rerun()
+
+
+
+def erratic_final_summary_page():
+    st.markdown('<div class="big-title">Executive Inventory Summary</div>', unsafe_allow_html=True)
+    #st.markdown('<div class="subtitle">Forecasting Accuracy, Costs, and Inventory Policy</div>', unsafe_allow_html=True)
+
+    # ================= RETRIEVE DATA FROM SESSION STATE =================
+    
+    # 1. Forecasting & Model Selection
+    selected_model = st.session_state.get('selected_model', 'N/A')
+    test_mape = st.session_state.get('test_mape', 0)
+    test_mae = st.session_state.get('test_mae', 0)
+    test_rmse = st.session_state.get('test_rmse', 0)
+    test_actual = st.session_state.get('test_total_actual', 0)
+    test_forecast = st.session_state.get('test_total_forecast', 0)
+    
+    # 2. Demand & Future Forecast
+    demand_type = st.session_state.get('demand_type_classification', 'N/A')
+    future_forecast_arr = st.session_state.get('future_forecast', [0])
+    total_future_demand = float(np.sum(future_forecast_arr))
+    future_dates = st.session_state.get('future_dates', None)
+    future_steps = len(future_forecast_arr)
+    
+    # 3. Price & Cost
+    unit_price = st.session_state.get('final_unit_price', 0)
+    purchasing_unit = st.session_state.get('selected_purchasing_unit', 'Unit')
+    ordering_cost = st.session_state.get('total_ordering_cost', 0)
+    holding_cost_unit = st.session_state.get('holding_cost_per_unit', 0)
+    holding_rate = st.session_state.get('holding_rate', 0)
+    
+    # 4. Supplier & Logistics
+    supplier_name = st.session_state.get('selected_supplier_name', 'N/A')
+    lead_time = st.session_state.get('supplier_lead_time', 0)
+    service_level_input = st.session_state.get('supplier_service_level', 0)
+    sigma_error = st.session_state.get('sigma_error', 0)
+    
+    # 5. Calculated Results
+    z_index = st.session_state.get('z_index', 0)
+    safety_stock = st.session_state.get('safety_stock', 0)
+    reorder_point = st.session_state.get('reorder_point', 0)
+    target_level = st.session_state.get('target_level', 0)
+    
+    # Recalculate Totals for display
+    if holding_cost_unit > 0 and total_future_demand > 0 and ordering_cost > 0:
+        import math
+        eoq = math.sqrt((2 * ordering_cost * total_future_demand) / holding_cost_unit)
+        num_orders = total_future_demand / eoq
+        annual_holding_cost = holding_cost_unit * ((eoq / 2) + safety_stock)
+        annual_ordering_cost = num_orders * ordering_cost
+        material_cost = unit_price * total_future_demand
+        total_cost = material_cost + annual_holding_cost + annual_ordering_cost
+    else:
+        eoq = 0
+        total_cost = 0
+
+    # ================= LAYOUT =================
+
+    # --- ROW 1: FORECASTING PERFORMANCE (New Addition) ---
+    st.markdown("### 🤖 Forecasting Model Results")
+    
+    
+
+    # --- ROW 2: KEY METRICS (Demand, EOQ, Cost) ---
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.2);'>
+                <div style='font-size: 0.9rem; opacity: 0.9;'>Total Future Demand in {purchasing_unit}s</div>
+                <div style='font-size: 1.8rem; font-weight: bold;'>{total_future_demand:,.0f}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%); padding: 10px; border-radius: 15px; text-align: center; color: #0d47a1; box-shadow: 0 4px 15px rgba(0,0,0,0.2);'>
+                <div style='font-size: 0.9rem; opacity: 0.9;'>selected model</div>
+                <div style='font-size: 1.8rem; font-weight: bold;'>{selected_model}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%); padding: 10px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.2);'>
+                <div style='font-size: 0.9rem; opacity: 0.9;'>Safety Stock in {purchasing_unit}s</div>
+                <div style='font-size: 1.8rem; font-weight: bold;'>{safety_stock:,.0f}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with col4:
+        st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); padding: 10px; border-radius: 15px; text-align: center; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.2);'>
+                <div style='font-size: 0.9rem; opacity: 0.9;'>Total Annual Cost</div>
+                <div style='font-size: 1.8rem; font-weight: bold;'>${total_cost:,.0f}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    
+    
+    # --- ROW 3: COST BREAKDOWN & SUPPLIER ---
+    col_left, col_right , col3= st.columns(3)
+
+    with col_left:
+        st.subheader("💰 Cost Breakdown")
+        cost_style = """
+            <div style="background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; margin-bottom: 10px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-size: 1.2rem; color: #555;">{title}</div>
+                </div>
+                <div style="font-size: 1.2rem; font-weight: bold; color: #155724;">{val}</div>
+            </div>
+        """
+        st.markdown(cost_style.format(title="Unit Price", val=f"${unit_price:.2f} / {purchasing_unit}"), unsafe_allow_html=True)
+        st.markdown(cost_style.format(title="Holding Cost", val=f"${holding_cost_unit:.2f} / {purchasing_unit}"), unsafe_allow_html=True)
+        st.markdown(cost_style.format(title="Ordering Cost", val=f"${ordering_cost:.2f} / order"), unsafe_allow_html=True)
+        st.markdown(cost_style.format(title="Total Material Cost", val=f"${material_cost:,.0f}"), unsafe_allow_html=True)
+
+    with col_right:
+        st.subheader("🏭 Supplier & Logistics")
+        supplier_style = """
+            <div style="background-color: #ffffff; border: 1px solid #e0e0e0; padding: 15px; margin-bottom: 20px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 1.4rem; color: #555;">{title}</div>
+                <div style="font-size: 1.4rem; font-weight: bold; color: #1565C0;">{val}</div>
+            </div>
+        """
+        st.markdown(supplier_style.format(title="Supplier", val=supplier_name), unsafe_allow_html=True)
+        st.markdown(supplier_style.format(title="Demand Type", val=demand_type), unsafe_allow_html=True)
+        st.markdown(supplier_style.format(title="Lead Time", val=f"{lead_time:.1f}"), unsafe_allow_html=True)
+        st.markdown(supplier_style.format(title="Service Level", val=f"{service_level_input:.0%}"), unsafe_allow_html=True)
+
+    with col3:
+        # --- ROW 4: INVENTORY POLICY ---
+        st.subheader("📦 Inventory Policy Recommendation")
+        
+        policy_text = "Periodic Review (P, Q)" if target_level > 0 else "Continuous Review (Q, R)"
+        display_level = target_level if target_level > 0 else reorder_point
+        level_name = "Order Up-to Level (S)" if target_level > 0 else "Reorder Point (ROP)"
+        
+
+        st.markdown(f"""
+            <div style="text-align: center; padding: 10px; background-color: #e3f2fd; border-radius: 10px; border-top: 5px solid #2196f3; margin-bottom:15px;">
+                <div style="color: #1976d2; font-weight: bold; font-size: 1.2rem; margin-bottom: 10px;">Policy Type</div>
+                <div style="color: #333; font-size: 1.1rem;">{policy_text}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+
+        st.markdown(f"""
+            <div style="text-align: center; padding: 10px; background-color: #fff3e0; border-radius: 10px; border-top: 5px solid #ff9800;margin-bottom:15px;">
+                <div style="color: #f57c00; font-weight: bold; font-size: 1.2rem; margin-bottom: 10px;">{level_name}</div>
+                <div style="color: #333; font-size: 2rem; font-weight: bold;">{display_level:,.0f}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+
+        st.markdown(f"""
+            <div style="text-align: center; padding: 10px; background-color: #e8f5e9; border-radius: 10px; border-top: 5px solid #4caf50;margin-bottom:15px;">
+                <div style="color: #388e3c; font-weight: bold; font-size: 1.2rem; margin-bottom: 10px;">Order Quantity (Q)</div>
+                <div style="color: #333; font-size: 2rem; font-weight: bold;">{eoq:,.0f}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+# ================= FOOTER =================
+    col_left, col_middle, col_right = st.columns([1, 1, 1])
+
+    with col_left:
+        if st.button("← Back to Calculations", use_container_width=True):
+            st.session_state.page = "eoq_erratic4"
+            st.rerun()
+
+    with col_middle:
+        if st.button("📋 View Action Plan", use_container_width=True, type="primary"):
+            st.session_state.show_action_plan = True
+
+
+    # ================= ACTION PLAN POPUP =================
+    if st.session_state.get('show_action_plan', False):
+        @st.dialog("📋 Action Plan")
+        def show_action_plan_popup():
+            st.markdown(f"""
+            ### Inventory Management Action Plan
+            
+            **Policy:** {policy_text}
+            
+            **Trigger Condition:**  
+            When Inventory Position ≤ **{display_level:,.0f}** {purchasing_unit}s
+            
+            **Action Required:**  
+            Order **{eoq:,.0f}** {purchasing_unit}s
+            
+            **Safety Buffer:**  
+            Maintain **{safety_stock:,.0f}** {purchasing_unit}s as Safety Stock
+            
+            ---
+            
+            #### Quick Reference:
+            - 🔔 **Reorder Point:** {display_level:,.0f} {purchasing_unit}s
+            - 📦 **Order Quantity:** {eoq:,.0f} {purchasing_unit}s
+            - 🛡️ **Safety Stock:** {safety_stock:,.0f} {purchasing_unit}s
+            """)
+            
+            if st.button("Close", use_container_width=True, type="primary"):
+                st.session_state.show_action_plan = False
+                st.rerun()
+        
+        show_action_plan_popup()
+
+
+
 
 
 
@@ -3634,7 +5257,7 @@ def supplier_report_page():
     col_left, col_spacer, col_right = st.columns([1, 2, 1])
     with col_left:
         if st.button("← Back to Data Analysis", use_container_width=True):
-            st.session_state.page = "eoq_smooth5"
+            st.session_state.page = "future forecasting"
             st.rerun()
 
 
@@ -3643,143 +5266,135 @@ def supplier_report_page():
 # ================================================ MAIN ROUTER ======================================================
 # =====================================================================================================================
 # Define the page names
-PAGES = [
-    "material",
-    "data",
-    "analysis",
-    "analysis2",
-    "analysis3",
-    "analysis4",
-    "results from analysis",
-    "recommendation",
-    "forecasting",
-    "future forecasting",
-    "price forecasting",
-    "eoq_smooth1",
-    "eoq_smooth2",
-    "eoq_smooth3",
-    "eoq_smooth4",
-    "eoq_smooth5",
-    "eoq_erratic1",
-    "eoq_erratic2",
-    "eoq_erratic3",
-    "supplier report"
+import streamlit as st
+import pandas as pd
+import numpy as np
+
+# --- 1. DEFINE PAGE GROUPS ---
+COMMON_PAGES = [
+    "Material Selection", "data", "analysis", "analysis2", "analysis3", "analysis4", 
+    "results from analysis", "recommendation", "forecasting", 
+    "future forecasting"
 ]
 
-# 1. Initialize session state for the current page
-if 'page' not in st.session_state:
-    st.session_state.page = "material" 
+SMOOTH_PAGES = [
+    "eoq_smooth1", "eoq_smooth2", "eoq_smooth3", "eoq_smooth4", "eoq_smooth5", "smooth_final_summary"
+]
 
+ERRATIC_PAGES = [
+    "eoq_erratic1", "eoq_erratic2", "eoq_erratic3", "eoq_erratic4", "erratic_final_summary"
+]
+
+FINAL_PAGES = ["supplier report"]
+
+# --- 2. BUILD DYNAMIC LIST BASED ON CLASSIFICATION ---
+# Get the classification from session state (defaults to None if not analyzed yet)
+demand_type = st.session_state.get('demand_type_classification', None)
+
+if demand_type == "Smooth":
+    CURRENT_PAGES = COMMON_PAGES + SMOOTH_PAGES + FINAL_PAGES
+elif demand_type == "Erratic":
+    CURRENT_PAGES = COMMON_PAGES + ERRATIC_PAGES + FINAL_PAGES
+else:
+    # If not yet classified, show only the common workflow
+    CURRENT_PAGES = COMMON_PAGES + FINAL_PAGES
+
+# --- 3. SESSION STATE MANAGEMENT ---
+if 'page' not in st.session_state:
+    st.session_state.page = "material"
+
+# Sync current page if it's no longer in the dynamic list (e.g., user changed data)
+if st.session_state.page not in CURRENT_PAGES:
+    st.session_state.page = "material"
+
+# --- 4. SIDEBAR NAVIGATION ---
 st.sidebar.title("Navigation")
 
-# 2. Handle the "EOQ & Safety Stock" Logic specifically
-
-# Helper to get the current index for the radio button
 def get_page_index():
     try:
-        return PAGES.index(st.session_state.page)
+        return CURRENT_PAGES.index(st.session_state.page)
     except ValueError:
         return 0
 
-# We capture the user's selection from the sidebar
 selection = st.sidebar.radio(
     "Go to", 
-    PAGES, 
-    index=get_page_index(),
-    label_visibility="collapsed"
+    CURRENT_PAGES, 
+    index=get_page_index()
 )
 
-# 3. Logic: Did the user just click "EOQ & Safety Stock"?
-if selection == "EOQ & Safety Stock" and st.session_state.page != "EOQ & Safety Stock":
-    
-    # --- YOUR FORECASTING CODE START ---
-    # 1. RUN PRICE FORECASTING AUTOMATICALLY IN BACKGROUND
-    # We need the data (assuming 'df_uploaded' has a 'price' column)
+# --- 5. AUTOMATIC PRICE FORECAST TRIGGER ---
+# Trigger calculation when moving from 'price forecasting' into the EOQ sections
+if selection in (SMOOTH_PAGES + ERRATIC_PAGES) and 'forecasted_price' not in st.session_state:
     if 'df_uploaded' in st.session_state:
         df = st.session_state['df_uploaded'].copy()
+        df.columns = df.columns.str.strip().str.lower()
         
-        # Ensure column names match what forecast_price expects
-        df.columns = df.columns.str.lower()
-        
-        # Check if 'price' exists
-        if 'price' in df.columns and 'date' in df.columns:
+        # Check for your specific spelling "price received"
+        if 'price received' in df.columns and 'date' in df.columns:
             with st.spinner("Calculating future price for EOQ..."):
                 try:
-                    # CALL YOUR FORECAST FUNCTION (Ensure it's imported/defined above)
-                    # from price_forecast import forecast_price  # <--- Make sure this import exists if in separate file
-                    forecasted_price, _, _ = forecast_price(df)
-                    
-                    # 2. SAVE THE PRICE TO SESSION STATE
-                    st.session_state.forecasted_price = forecasted_price
-                    st.success("Future price calculated successfully!")
+                    # Calling your updated weighted average function
+                    f_price, _, _ = forecast_price(df)
+                    st.session_state.forecasted_price = f_price
                 except Exception as e:
-                    st.error(f"Could not forecast price: {e}")
-                    st.session_state.forecasted_price = None
+                    st.error(f"Auto-forecast failed: {e}")
     else:
-        st.warning("No data found to forecast price.")
-    # --- YOUR FORECASTING CODE END ---
+        st.warning("Please upload data to enable EOQ calculations.")
 
-    # 3. NAVIGATE TO EOQ PAGE (Now that forecasting is done)
-    st.session_state.page = "EOQ & Safety Stock"
-    st.rerun()
-
-# 4. Standard Navigation for all other pages
-elif selection != st.session_state.page:
+# Handle Page Routing
+if selection != st.session_state.page:
     st.session_state.page = selection
     st.rerun()
 
-
-
-if st.session_state.page == "material":
+# --- 6. PAGE ROUTING LOGIC ---
+if st.session_state.page == "Material Selection":
     page_material() 
-
 elif st.session_state.page == "data":
     page_data()
-
 elif st.session_state.page == "analysis":
     analysis_page()
-
 elif st.session_state.page == "analysis2":
     analysis2_page()
-
 elif st.session_state.page == "analysis3":
     analysis3_page()
-
 elif st.session_state.page == "analysis4":
     analysis4_page()
-
 elif st.session_state.page == "results from analysis":
     results_from_analysis_page() 
-
 elif st.session_state.page == "recommendation":
     recommendation_page()
-
 elif st.session_state.page == "forecasting":
     forecasting_page()
-
 elif st.session_state.page == "future forecasting":
     future_forecasting_page()
-
 elif st.session_state.page == "price forecasting":
     price_forecasting_page()
 
+# Smooth Flow
 elif st.session_state.page == "eoq_smooth1":
     eoq_smooth1_page()
-    
 elif st.session_state.page == "eoq_smooth2":
     eoq_smooth2_page()
-
 elif st.session_state.page == "eoq_smooth3":
     eoq_smooth3_page()
-
 elif st.session_state.page == "eoq_smooth4":
     eoq_smooth4_page()
-
 elif st.session_state.page == "eoq_smooth5":
     eoq_smooth5_page()
+elif st.session_state.page == "smooth_final_summary":
+    smooth_final_summary_page()
+
+# Erratic Flow
+elif st.session_state.page == "eoq_erratic1":
+    eoq_erratic1_page()
+elif st.session_state.page == "eoq_erratic2":
+    eoq_erratic2_page()
+elif st.session_state.page == "eoq_erratic3":
+    eoq_erratic3_page()
+elif st.session_state.page == "eoq_erratic4":
+    eoq_erratic4_page()
+elif st.session_state.page == "erratic_final_summary":
+    erratic_final_summary_page()
 
 elif st.session_state.page == "supplier report":
     supplier_report_page()
-
-
-    
