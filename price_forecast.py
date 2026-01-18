@@ -1,61 +1,55 @@
 # price_forecast.py
-
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
 import matplotlib.pyplot as plt
 import io
 
+
 def forecast_price(df):
-    """
-    Performs linear regression forecasting for the next year's average price.
-    Assumes df has 'date' (datetime) and 'price' columns.
-    Aggregates data annually by mean price.
-    """
-    # Ensure 'date' is datetime
+    # Ensure date conversion
     df['date'] = pd.to_datetime(df['date'])
-    
-    # Extract year
     df['year'] = df['date'].dt.year
     
-    # Aggregate by year: mean price
-    annual_df = df.groupby('year')['price'].mean().reset_index()
-    annual_df.columns = ['Year', 'Actual Price']
+    # 1. Calculate Weighted Average Components
+    # We use the cleaned column names here
+    df['total_value'] = df['price received'] * df['quantity received']
     
-    # Prepare data for linear regression
-    X = annual_df['Year'].values.reshape(-1, 1)
-    y = annual_df['Actual Price'].values
+    # 2. Aggregate by year
+    annual_agg = df.groupby('year').agg({
+        'total_value': 'sum',
+        'quantity received': 'sum'
+    }).reset_index()
     
-    # Fit the model
+    # 3. Calculate the Weighted Price
+    # This creates the 'Actual Price' column used in the regression
+    annual_agg['Actual Price'] = annual_agg['total_value'] / annual_agg['quantity received']
+    
+    # Prepare data for Linear Regression
+    X = annual_agg['year'].values.reshape(-1, 1)
+    y = annual_agg['Actual Price'].values
+    
     model = LinearRegression()
     model.fit(X, y)
     
-    # Get the next year (assuming current year is the max in data + 1)
-    current_year = annual_df['Year'].max()
+    current_year = annual_agg['year'].max()
     next_year = current_year + 1
-    
-    # Forecast for next year
     forecasted_price = model.predict(np.array([[next_year]]))[0]
     
-    # Create forecasted row
+    # Prepare result dataframe for the UI
+    result_df = annual_agg[['year', 'Actual Price']].copy()
+    result_df.columns = ['Year', 'Actual Price']
+    
     forecasted_row = pd.DataFrame({'Year': [next_year], 'Forecasted Price': [forecasted_price]})
+    result_df = pd.concat([result_df, forecasted_row], ignore_index=True)
     
-    # Combine actual and forecasted
-    result_df = pd.concat([annual_df, forecasted_row], ignore_index=True)
-    result_df['Actual Price'] = result_df['Actual Price'].where(result_df['Year'] != next_year, np.nan)
-    result_df['Forecasted Price'] = result_df['Forecasted Price'].where(result_df['Year'] == next_year, np.nan)
-    
-    # Generate time series plot
+    # Plotting
     plt.figure(figsize=(10, 6))
-    plt.plot(result_df['Year'], result_df['Actual Price'], marker='o', label='Actual Price', color='blue')
-    plt.plot(result_df['Year'], result_df['Forecasted Price'], marker='o', linestyle='--', label='Forecasted Price', color='red')
-    plt.title('Annual Price: Actual vs Forecasted')
-    plt.xlabel('Year')
-    plt.ylabel('Average Price')
+    plt.plot(result_df['Year'], result_df['Actual Price'], marker='o', label='Actual (Weighted)')
+    plt.plot(result_df['Year'], result_df['Forecasted Price'], marker='o', linestyle='--', color='red', label='Forecast')
     plt.legend()
     plt.grid(True)
     
-    # Save plot to bytes
     img_buf = io.BytesIO()
     plt.savefig(img_buf, format='png')
     img_buf.seek(0)
