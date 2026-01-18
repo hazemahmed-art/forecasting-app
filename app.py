@@ -125,6 +125,10 @@ def load_css(file_name):
 
 load_css("style.css")
 
+import os
+import pandas as pd
+import streamlit as st
+
 # =====================================================================================================================
 # ============================================ PAGE 1 : MATERIAL SELECTION ============================================
 # =====================================================================================================================
@@ -133,7 +137,7 @@ def page_material():
     st.markdown('<div class="big-title">Material Selection</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">Select a Target Material</div>', unsafe_allow_html=True)
     # ========================= Load Data =========================
-    file_path = "Database/Material Info.xlsx"
+    file_path = "Database/Material Information.xlsx"
 
     if not os.path.exists(file_path):
         st.error(f"File not found: {file_path}")
@@ -147,7 +151,7 @@ def page_material():
 
     filter_columns = ['Item Family', 'Item Type', 'Grade', 'Item Code']
     detail_columns = ['Packaging', 'Physical Properties', 'Storage Conditions',
-                    'Warehouse Location', 'Shelf Life', 'Supplier', 'Lead Time', 'Service Level']
+                    'Warehouse Location', 'Shelf Life', 'Supplier', 'Purchasing Unit', 'Service Level']
 
     missing_cols = [col for col in filter_columns + detail_columns if col not in df.columns]
     if missing_cols:
@@ -221,12 +225,10 @@ def page_material():
 
     if selected_code != CODE_PLACEHOLDER:
         final_selection = filtered_df[filtered_df['Item Code'] == selected_code]
-
         st.session_state['selected_material'] = final_selection.iloc[0].to_dict()
     else:
         final_selection = pd.DataFrame()
 
-    # الزر والرسالة في نفس السطر
     col1, col_spacer, col2 = st.columns([1, 2.2 ,1]) 
 
     with col1:
@@ -241,7 +243,6 @@ def page_material():
 
     if selected_code != CODE_PLACEHOLDER:
         row = filtered_df[filtered_df['Item Code'] == selected_code].iloc[0]
-            # ===== Material Details in one line =====
         col1, col2, col_spacer = st.columns([1.5, 5, 2])
         with col1:
             st.subheader("Material Details:")
@@ -255,7 +256,6 @@ def page_material():
             """, unsafe_allow_html=True)
         st.markdown('<hr class="custom-divider">', unsafe_allow_html=True)
 
-        # ===== Grid for other details =====
         st.markdown('<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">', unsafe_allow_html=True)
         
         for i in range(0, len(detail_columns), 4):
@@ -269,6 +269,7 @@ def page_material():
                         <span style="font-size: 1rem; color: #555;">{value}</span>
                     </div>
                     """, unsafe_allow_html=True)
+    
     st.markdown('<div class="next-btn-container">', unsafe_allow_html=True)
     col_left, col_right = st.columns([6, 1])
     with col_right:
@@ -276,10 +277,8 @@ def page_material():
             if selected_code == CODE_PLACEHOLDER:
                 st.warning("Please select an Item Code to proceed.")
             else:
-                # ✅ Save the selected material row to session_state
                 row = filtered_df[filtered_df['Item Code'] == selected_code].iloc[0]
                 st.session_state.selected_material_row = row
-                
                 st.session_state.page = "data"
                 st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
@@ -294,117 +293,128 @@ def page_data():
     st.markdown("""
         <style>
         .tight-label {
-            margin-bottom: -30px !important;
+            margin-bottom: 0px !important;
             display: block;
         }
         </style>
     """, unsafe_allow_html=True)
 
-    col1, col2 = st.columns([1,5])  
 
+
+    col1,col2,col3 = st.columns([1,2,2])
     with col1:
         st.markdown("""
-        <span class="tight-label" style="font-size: 1.3rem; font-weight:bold;">
-            Select Period
-            <span class="help-icon" data-help="Choose the time period that your demand data represents.">
-                ?
-            </span>
+        <span class="tight-label" style="font-size: 1.5rem; font-weight:bold; color: rgb(21, 101, 192); margin-bottom:10px;">
+            Demand Data Source
         </span>
         """, unsafe_allow_html=True)
-
-        period = st.selectbox(
+    with col2: 
+    # Radio Button: Database vs Upload
+        data_source_option = st.radio(
             "",
-            ["Daily","Weekly", "Monthly", "Quarterly", "Semi-Annual", "Annual"],
-            index=None,
-            placeholder="Select Period",
-            key="selected_period"  # <--- ADD THIS LINE
+            ["Use demand history in data base", "Upload another file"],
+            label_visibility="collapsed",
+            horizontal=True
         )
 
+    uploaded_file = None
+    df_display = pd.DataFrame()
 
-    with col2:
-        st.markdown("""
-        <span class="tight-label" style="font-size: 1.3rem; font-weight:bold;">
-            Upload Demand Excel File
-            <span class="help-icon" data-help="Please upload the Excel file containing your demand data. Only .xlsx files are supported. The file must include three columns: Date, Demand, and Price">
-                ?
-            </span>
-        </span>
-        """, unsafe_allow_html=True)
-
+    # Case 1: Upload another file
+    if data_source_option == "Upload another file":
         uploaded_file = st.file_uploader(
             "",
-            type=["xlsx"]
+            type=["xlsx"],
+            key="demand_uploader"
         )
+        if uploaded_file is not None:
+            try:
+                df_display = pd.read_excel(uploaded_file)
+            except Exception as e:
+                st.error(f"Error reading uploaded file: {e}")
 
-
-    if uploaded_file is not None:
-        try:
-            # قراءة الملف
-            df_uploaded = pd.read_excel(uploaded_file)
-            st.session_state['df_uploaded'] = df_uploaded
-
-            # ===== تقسيم الصفحة لعمودين =====
-            left_col, right_col = st.columns([2, 1])  # الجدول أعرض من Summary
-
-            # ===== العمود الأيسر: عرض الجدول فورًا =====
-            with left_col:
-                df_display = df_uploaded.copy()
-
+    # Case 2: Use database (Reads automatically based on Item Code from page 1)
+    else:
+        # Check if we have a selected material
+        if 'selected_material_row' in st.session_state:
+            item_code = st.session_state.selected_material_row['Item Code']
+            db_path = "Database/demand_history.xlsx"
+            
+            if os.path.exists(db_path):
                 try:
-                    df_display.iloc[:, 0] = pd.to_datetime(df_display.iloc[:, 0]).dt.strftime('%Y-%m-%d')
+                    # Read the sheet corresponding to the item code
+                    df_display = pd.read_excel(db_path, sheet_name=item_code)
+                except ValueError:
+                    st.error(f"Sheet '{item_code}' not found in 'demand_history.xlsx'")
+                except Exception as e:
+                    st.error(f"Error reading database file: {e}")
+            else:
+                st.error(f"Database file not found: {db_path}")
+        else:
+            st.warning("Please go back and select a material first to load its history.")
+
+    # ---------------- DISPLAY TABLE AND SUMMARY ----------------
+    # Only display if we have data to show (either from DB or Upload)
+    if not df_display.empty:
+        st.markdown("<br>", unsafe_allow_html=True) # Spacing
+        left_col, right_col = st.columns([2, 1])
+
+        # ===== LEFT: Table =====
+        with left_col:
+            df_copy = df_display.copy()
+            try:
+                # Try to format the first column as date if possible
+                df_copy.iloc[:, 0] = pd.to_datetime(df_copy.iloc[:, 0]).dt.strftime('%Y-%m-%d')
+            except:
+                pass
+
+            styled_df = df_copy.style.set_properties(**{
+                'font-size': '14pt',     
+                'font-weight': '400',     
+                'text-align': 'center'    
+            }).set_table_styles([
+                {'selector': 'th', 'props': [('font-size', '16px'), ('font-weight', 'bold')]}
+            ])
+
+            st.dataframe(styled_df, height=300, use_container_width=True)
+
+        # ===== RIGHT: Summary =====
+        with right_col:
+            num_periods = len(df_display)
+            start_date_raw = df_display.iloc[0, 0] if not df_display.empty else "N/A"
+            end_date_raw = df_display.iloc[-1, 0] if not df_display.empty else "N/A"
+
+            start_date = pd.to_datetime(start_date_raw).strftime('%Y-%m-%d') if start_date_raw != "N/A" else "N/A"
+            end_date = pd.to_datetime(end_date_raw).strftime('%Y-%m-%d') if end_date_raw != "N/A" else "N/A"
+
+            duration_str = "N/A"
+            if num_periods > 1 and start_date != "N/A" and end_date != "N/A":
+                try:
+                    duration = pd.to_datetime(end_date) - pd.to_datetime(start_date)
+                    duration_str = f"{duration.days} days"
                 except:
-                    pass
+                    duration_str = "Cannot calculate"
 
-                styled_df = df_display.style.set_properties(**{
-                    'font-size': '40px',      
-                    'font-weight': '900',     
-                    'text-align': 'center'    
-                }).set_table_styles([
-                    {'selector': 'th', 'props': [('font-size', '22px'), ('font-weight', 'bold')]}  # للهيدر
-                ])
+            summary_columns = ["Total Periods", "Start Date", "End Date", "Duration"]
+            summary_values = [num_periods, start_date, end_date, duration_str]
 
-                st.dataframe(styled_df, height=320, use_container_width=True)
+            for i, col_name in enumerate(summary_columns):
+                st.markdown(f"""
+                <div style="
+                    padding: 0.9rem;
+                    border-radius: 10px;
+                    margin-bottom: 10px;
+                    border-left: 5px solid #1565C0;
+                    background-color: #f8f9fa;
+                ">
+                    <span style="font-weight:bold; color:#1565C0; font-size:1.5rem; ">{col_name}: </span>
+                    <span style="font-weight:bold;font-size:1.5rem; color:#555;">{summary_values[i]}</span>
+                </div>
+                """, unsafe_allow_html=True)
 
-            with right_col:
-                num_periods = len(df_uploaded)-1
-                start_date_raw = df_uploaded.iloc[0, 0] if not df_uploaded.empty else "N/A"
-                end_date_raw = df_uploaded.iloc[-1, 0] if not df_uploaded.empty else "N/A"
-
-                start_date = pd.to_datetime(start_date_raw).strftime('%Y-%m-%d') if start_date_raw != "N/A" else "N/A"
-                end_date = pd.to_datetime(end_date_raw).strftime('%Y-%m-%d') if end_date_raw != "N/A" else "N/A"
-
-                duration_str = "N/A"
-                if num_periods > 1 and start_date != "N/A" and end_date != "N/A":
-                    try:
-                        duration = pd.to_datetime(end_date) - pd.to_datetime(start_date)
-                        duration_str = f"{duration.days} days"
-                    except:
-                        duration_str = "Cannot calculate"
-
-                summary_columns = ["Total Periods", "Start Date", "End Date", "Duration"]
-                summary_values = [num_periods, start_date, end_date, duration_str]
-
-                for i, col_name in enumerate(summary_columns):
-                    st.markdown(f"""
-                    <div style="
-                        padding: 0.9rem;
-                        border-radius: 10px;
-                        margin-bottom: 10px;
-                        border-left: 5px solid #1565C0;
-                        background-color: #f8f9fa;
-                    ">
-                        <span style="font-weight:bold; color:#1565C0; font-size:1.5rem; ">{col_name}: </span>
-                        <span style="font-size:1.7rem; color:#555;">{summary_values[i]}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-        except Exception as e:
-            st.error(f"Error reading file: {e}")
-
-
+    # ---------------- FOOTER BUTTONS ----------------
     st.markdown("""
         <style>
-            /* رفع الصف اللي فيه الزراير لفوق */
             div[data-testid="column"]:nth-of-type(1) .stButton {margin-top: -20px;}
             div[data-testid="column"]:nth-of-type(3) .stButton {margin-top: -20px;}
         </style>
@@ -419,40 +429,42 @@ def page_data():
 
     with col_next:
         if st.button("Next → Data Analysis", type="primary", use_container_width=True):
-            if uploaded_file is None or period is None:
-                st.warning("Please upload a file and select a period first.")
+            # Validation
+            is_data_valid = False
+            final_df = pd.DataFrame()
+
+            if data_source_option == "Upload another file":
+                if uploaded_file is not None and not df_display.empty:
+                    is_data_valid = True
+                    final_df = df_display
+                else:
+                    st.warning("Please upload a file first.")
             else:
-                try:
-                    df = pd.read_excel(uploaded_file)
-                    if 'demand' not in df.columns:
-                        st.error("Column 'demand' not found in the uploaded file!")
-                        return
+                # Database mode
+                if 'selected_material_row' in st.session_state and not df_display.empty:
+                    is_data_valid = True
+                    final_df = df_display
+                else:
+                    st.warning("No demand history data found in database for this item.")
 
-                    if 'date' in df.columns:
-                        df['date'] = pd.to_datetime(df['date'], errors='coerce')
 
-                    # --- SAVING TO SESSION STATE ---
-                    
-                    # 1. Save the dataframe
-                    st.session_state.df = df
-                    st.session_state['df_uploaded'] = df 
-                    
-                    # 2. SAVE THE PERIOD (We use a DIFFERENT key to avoid the widget error)
-                    # The widget 'selected_period' already has the value, we just copy it to 'period'
-                    st.session_state.period = period
-                    
-                    # 3. Save other details
+            if is_data_valid:
+                
+                # 1. Save the dataframe
+                st.session_state.df = final_df
+                st.session_state['df_uploaded'] = final_df 
+                
+                # 3. Save source info
+                st.session_state.data_source = data_source_option
+                if data_source_option == "Upload another file":
                     st.session_state.uploaded_file_name = uploaded_file.name
+                else:
+                    st.session_state.uploaded_file_name = f"DB_{st.session_state.selected_material_row['Item Code']}"
 
-                    st.success(f"File '{uploaded_file.name}' uploaded and validated successfully!")
-                    st.session_state.page = "analysis"
-                    st.rerun()
+                st.session_state.page = "analysis"
+                st.rerun()
 
-                except Exception as e:
-                    st.error(f"Error processing file: {str(e)}")
-                    
     st.markdown('</div>', unsafe_allow_html=True)
-
     
 # =====================================================================================================================
 # ============================================ PAGE 3 : ANALYSIS ====================================================
@@ -473,16 +485,9 @@ def analysis_page():
     st.markdown(f"""
     <div style="background-color: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; margin-top: -5px; font-size: 1.1rem; border: 1px solid #1565C0">
         <strong >Analysis Based On   →   </strong>
-        <strong style="color: rgb(21, 101, 192);">   File Name:</strong> {file_name} &nbsp; | &nbsp; 
-        <strong style="color: rgb(21, 101, 192);">Aggregation Period:</strong> {period_selected} &nbsp; | &nbsp; 
         <strong style="color: rgb(21, 101, 192);">Selected Material:</strong> {material_info}
     </div>
     """, unsafe_allow_html=True)
-
-    
-    # ================= RAW DATA =================
-    #with st.expander("View Raw Data", expanded=False):
-    #    st.dataframe(df.head(200000), use_container_width=True)
 
     # ================= BEFORE PREPARATION =================
     st.markdown(
@@ -730,6 +735,7 @@ def analysis3_page():
 
 
             with col2:
+                
                 fig = plot_comparative_demand(df_prepared, selected_period)
                 st.plotly_chart(fig, use_container_width=True)
 
@@ -740,10 +746,13 @@ def analysis3_page():
         if st.button("← Back", use_container_width=True):
             st.session_state.page = "analysis2"
             st.rerun()
-
-    with col_right:
-        if st.button("Next → Aggregated Data Statistics", type="primary", use_container_width=True):
+    with col_spacer:
+        if st.button("More Detailed Statistics", type="primary", use_container_width=True):
             st.session_state.page = "analysis4"
+            st.rerun()
+    with col_right:
+        if st.button("Next → Results from Analysis", type="primary", use_container_width=True):
+            st.session_state.page = "results from analysis"
             st.rerun()
 
     #======================================================================/////////////////////////////////////////////////////////////////////third page
@@ -1150,7 +1159,7 @@ def results_from_analysis_page():
 
 
 def recommendation_page(): 
-    st.markdown('<div class="big-title" style="margin-bottom: 1.5rem;">Price Forecasting & Recommendation Forecasting Model</div>', unsafe_allow_html=True)
+    st.markdown('<div class="big-title" style="margin-bottom: 1.5rem;">Sammary & Recommendation Forecasting Model</div>', unsafe_allow_html=True)
 
     # ==================== AUTO-RUN PRICE FORECAST BLOCK ====================
     # We check if the result exists. If not, we calculate it immediately.
@@ -1479,7 +1488,7 @@ def forecasting_page():
             """,
             unsafe_allow_html=True
         )
-    st.markdown("---")
+    #st.markdown("---")
 
     # ================= RUN SELECTED MODEL =================
     with st.spinner("Running Forecasting Model... Please wait..."):
@@ -1594,15 +1603,30 @@ def forecasting_page():
     main_col1, main_col2, main_col3 = st.columns([3, 3, 8])
 
     # --- COLUMN 1: Volume Comparison ---
+
     with main_col1:
-        st.markdown("#### 📊 Total Demand")
-        st.metric("Actual Demand", f"{total_actual_demand:,.2f}")
-        st.metric(f"{selected_model} Forecast", f"{total_forecasted_demand:,.2f}")
-        st.metric("Linear Regression", f"{sum_lr_forecast:,.2f}")
+        st.markdown("### 📊 Total Demand")
+                
+        st.markdown(f"""
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 25px; font-weight: bold; color: #1E88E5;">Actual Demand</div>
+                <div style="font-size: 32px; font-weight: 800; color: #555;">{total_actual_demand:,.2f}</div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 25px; font-weight: bold; color: #1E88E5;">{selected_model} Forecast</div>
+                <div style="font-size: 32px; font-weight: 800; color: #555;">{total_forecasted_demand:,.2f}</div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 25px; font-weight: bold; color: #1E88E5;">Linear Regression</div>
+                <div style="font-size: 32px; font-weight: 800; color: #555;">{sum_lr_forecast:,.2f}</div>
+            </div>
+        """, unsafe_allow_html=True)
 
     # --- COLUMN 2: Model Performance (Error Metrics) ---
     with main_col2:
-        st.markdown("#### 📉 Error Metrics")
+        st.markdown("### 📉 Error Metrics")
         # Metric calculation logic
         steps_test = len(test_data)
         test_forecast_vals = model.predict(steps_test)
@@ -1616,13 +1640,27 @@ def forecasting_page():
         mae_val = np.mean(np.abs(actual_vals - test_forecast_vals))
         rmse_val = np.sqrt(np.mean((actual_vals - test_forecast_vals)**2))
         
-        st.metric("MAE", f"{mae_val:.2f}")
-        st.metric("RMSE", f"{rmse_val:.2f}")
-        st.metric("MAPE", f"{mape_val:.2f}%")
+        
+        st.markdown(f"""
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 25px; font-weight: bold; color: #1E88E5;">MAE</div>
+                <div style="font-size: 32px; font-weight: 800; color: #555;">{mae_val:.2f}</div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 25px; font-weight: bold; color: #1E88E5;">RMSE</div>
+                <div style="font-size: 32px; font-weight: 800; color: #555;">{rmse_val:.2f}</div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 25px; font-weight: bold; color: #1E88E5;">MAPE</div>
+                <div style="font-size: 32px; font-weight: 800; color: #555;">{mape_val:.2f}%</div>
+            </div>
+        """, unsafe_allow_html=True)
 
     # --- COLUMN 3: Detailed Comparison Chart ---
     with main_col3:
-        st.markdown("#### 📈 Segmented Comparison")
+        st.markdown("### 📈 Segmented Comparison")
         # ── NEW: AGGREGATE DATA INTO 12 EQUAL CHUNKS ────────────────────────────────────
         daily_comparison = pd.DataFrame({
             "Date": test_data['date'],
@@ -1672,20 +1710,40 @@ def forecasting_page():
         ).interactive().properties(height=300)
         st.altair_chart(comp_chart, use_container_width=True)
 
-    # Button to show aggregated data in a dialog/popup
-    if st.button("📊 View Aggregated Segment Data", key="view_segment_data_btn"):
-        st.session_state.show_segment_dialog = True
 
-    # Display dialog if button was clicked
-    @st.dialog("Aggregated Segment Data (12 Points)")
-    def show_segment_data():
-        st.dataframe(aggregated_comparison, use_container_width=True)
-        if st.button("Close"):
-            st.session_state.show_segment_dialog = False
-            st.rerun()
+    col1,col2,colspacer = st.columns([2,3,2])
 
-    if st.session_state.get('show_segment_dialog', False):
-        show_segment_data()
+    with col1:
+        # Button to show aggregated data in a dialog/popup
+        if st.button("📊 View Aggregated Segment Data", key="view_segment_data_btn"):
+            st.session_state.show_segment_dialog = True
+
+        # Display dialog if button was clicked
+        @st.dialog("Aggregated Segment Data (12 Points)")
+        def show_segment_data():
+            st.dataframe(aggregated_comparison, use_container_width=True)
+            if st.button("Close"):
+                st.session_state.show_segment_dialog = False
+                st.rerun()
+
+        if st.session_state.get('show_segment_dialog', False):
+            show_segment_data()
+    with col2:
+        st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 2px;
+                border-radius: 15px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                text-align: center;
+                color: white;
+                margin-bottom:10px;
+            ">
+                <h4 style="margin: 5px; font-size: 26px; font-weight: bold;">Selected Forecasting Model: {selected_model} </h4>
+                <h2 style=">hellow</h2>
+            </div>
+        """, unsafe_allow_html=True)
+
     # ================= NAVIGATION =================
     col_left, col_middle, col_right = st.columns([1, 2, 1])
     
@@ -1694,20 +1752,20 @@ def forecasting_page():
             st.session_state.page = "recommendation"
             st.rerun()
 
-    with col_middle:
-        # Export Test Results
-        buffer_test = io.BytesIO()
-        with pd.ExcelWriter(buffer_test, engine="xlsxwriter") as writer:
-            result.to_excel(writer, index=False, sheet_name="Test Forecast")
-        buffer_test.seek(0)
+    # with col_middle:
+    #    # Export Test Results
+    #    buffer_test = io.BytesIO()
+    #    with pd.ExcelWriter(buffer_test, engine="xlsxwriter") as writer:
+    #        result.to_excel(writer, index=False, sheet_name="Test Forecast")
+    #    buffer_test.seek(0)
 
-        st.download_button(
-            label="⬇ Download Test Forecast Results as Excel File", 
-            data=buffer_test,
-            file_name=f"{selected_model}_Test_Forecast_Results.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+    #    st.download_button(
+    #        label="⬇ Download Test Forecast Results as Excel File", 
+    #        data=buffer_test,
+    #        file_name=f"{selected_model}_Test_Forecast_Results.xlsx",
+    #        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    #        use_container_width=True
+    #    )
 
     with col_right:
         if st.button("Next → Run Forecasting Models", type="primary", use_container_width=True):
@@ -1764,13 +1822,34 @@ def future_forecasting_page():
                 unsafe_allow_html=True
             )
 
+            # --- CUSTOM CSS TO STYLE THE INPUT FIELD ---
+            st.markdown("""
+                <style>
+                    /* Target the specific input using its key */
+                    div[data-testid="stNumberInput"] [role="spinbutton"] {
+                        font-size: 24px !important;
+                        font-weight: bold !important;
+                        color: #1E88E5 !important; /* Blue color for the value */
+                        margin-top: -50px;  
+                    }
+
+                    /* Target the label text */
+                    div[data-testid="stNumberInput"] label > div {
+                        font-size: 20px !important;
+                        font-weight: bold !important;
+                        color: #333 !important;
+                        margin-top: -60px;  
+                    }
+                </style>
+            """, unsafe_allow_html=True)
+
             future_steps = st.number_input(
-                "How many months do you want to forecast into the future?",
+                "How many months do you want to be forecasted?",
                 min_value=min_val,
                 max_value=max_val,
                 value=default_val,
                 step=1,
-                key="future_steps_input",
+                key="future_steps_input", # This key links to the CSS above
                 help="Choose the number of future months to predict (e.g., 12 for one year)"
             )
 
@@ -1825,7 +1904,7 @@ def future_forecasting_page():
                         text-align: center;
                         color: white;
                     ">
-                        <h4 style="margin: 0; font-size: 14px;">MAE</h4>
+                        <h4 style="margin: 0; font-size: 20px;">MAE</h4>
                         <h2 style="margin: -16px; font-size: 26px; font-weight: bold;">{:.2f}</h2>
                     </div>
                 """.format(mae), unsafe_allow_html=True)
@@ -1840,7 +1919,7 @@ def future_forecasting_page():
                         text-align: center;
                         color: white;
                     ">
-                        <h4 style="margin: 0; font-size: 14px;">RMSE</h4>
+                        <h4 style="margin: 0; font-size: 20px;">RMSE</h4>
                         <h2 style="margin: -16px; font-size: 26px; font-weight: bold;">{:.2f}</h2>
                     </div>
                 """.format(rmse), unsafe_allow_html=True)
@@ -1855,7 +1934,7 @@ def future_forecasting_page():
                         text-align: center;
                         color: white;
                     ">
-                        <h4 style="margin: 0; font-size: 14px; opacity: 0.9;">MAPE</h4>
+                        <h4 style="margin: 0; font-size: 20px; opacity: 0.9;">MAPE</h4>
                         <h2 style="margin: -16px; font-size: 26px; font-weight: bold;">{:.2f}</h2>
                     </div>
                 """.format(mape), unsafe_allow_html=True)
@@ -1870,7 +1949,7 @@ def future_forecasting_page():
                         text-align: center;
                         color: white;
                     ">
-                        <h4 style="margin: 0; font-size: 14px; opacity: 0.9;">R2 Score</h4>
+                        <h4 style="margin: 0; font-size: 20px; opacity: 0.9;">R2 Score</h4>
                         <h2 style="margin: -16px; font-size: 26px; font-weight: bold;">{:.2f}</h2>
                     </div>
                 """.format(r2), unsafe_allow_html=True)
@@ -1922,8 +2001,8 @@ def future_forecasting_page():
     st.markdown(f"""
         <div class="detail-card" style="padding-left: 2.5rem; border-radius: 10px; background-color: #f8f9fa; margin-bottom: 1rem; border-left: 5px solid #1565C0;">
             <h3 style="color:#1565C0; margin:0;">
-                Total Demand for the Forecasted Period: ( 
-                <strong style="color: rgb(255, 75, 75);">{formatted_total}</strong> ) Units
+                Total Demand for the Forecasted Period ( 
+                <strong style="color: rgb(255, 75, 75);">{future_steps} Months</strong> ): ( <strong style="color: rgb(255, 75, 75);">{formatted_total}</strong> )
             </h3>
         </div>
     """, unsafe_allow_html=True)
@@ -2103,38 +2182,53 @@ def eoq_smooth1_page():
 
         if has_forecast:
             # Display the available forecasted price
-            st.info(f"Forecasted Price Available: **${st.session_state.forecasted_price:.2f}**")
-            
-            # Create the radio selection for the user
             st.markdown("""
             <style>
-            div[role="radiogroup"] > label {
-                font-size: 20px !important;
+            /* Target the text inside st.info */
+            .stAlert p {
+                font-size: 22px !important;
+            }
+
+            /* Make the bold price value even larger and bolder */
+            .stAlert strong {
+                font-size: 28px !important;
+                font-weight: 800 !important;
             }
             </style>
             """, unsafe_allow_html=True)
 
-            # --- Radio selection ---
-            price_selection = st.radio(
-                "How would you like to proceed with the Unit Price?",
-                ["Use Forecasted Price", "Enter Price Manually"],
-                horizontal=True
-            )
+            st.info(f"Forecasted Price Available: **${st.session_state.forecasted_price:.2f}**")            
+            
+        # Create the radio selection for the user
+        st.markdown("""
+        <style>
+        /* Target the radio button labels */
+        div[data-testid="stRadio"] > label > div[data-testid="stMarkdownContainer"] > p,
+        div[role="radiogroup"] > label > div[data-testid="stMarkdownContainer"] > p {
+            font-size: 24px !important;
+            font-weight: bold !important;
+            line-height: 1.5;
 
-            if price_selection == "Use Forecasted Price":
-                unit_price = st.session_state.forecasted_price
-            else:
-                unit_price = st.number_input(
-                    "Enter Unit Price ($)",
-                    min_value=0.0,
-                    value=float(st.session_state.forecasted_price),
-                    step=0.1
-                )
-                
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # --- Radio selection ---
+        price_selection = st.radio(
+            "Please select a unit price in order to proceed with the calculations.",
+            ["Use Forecasted Price", "Enter Price Manually"],
+            horizontal=True
+        )
+
+        if price_selection == "Use Forecasted Price":
+            unit_price = st.session_state.forecasted_price
         else:
-            # Fallback: If no forecast, ask for manual input directly
-            st.warning("No forecasted price found. Please enter the unit price manually.")
-            unit_price = st.number_input("Unit Price ($)", min_value=0.0, value=10.0, step=0.1)
+            unit_price = st.number_input(
+                "Enter Unit Price ($)",
+                min_value=0.0,
+                value=float(st.session_state.forecasted_price),
+                step=0.1
+            )
         
         # ================= SAVE UNIT PRICE =================
         st.session_state['final_unit_price'] = unit_price
@@ -2250,6 +2344,7 @@ def eoq_smooth1_page():
                 st.markdown(f"""
                     <div style='background-color: #e3f2fd; padding: 15px; border-radius: 8px; text-align: center;'>
                         <strong style="font-size:20px ;">Avg Lead Time = {avg_lead_time:.2f}</strong>
+                    <span style = "font-size: 22px;" class="help-icon" data-help="The Avgerage of the Lead Time & Service Level have been calculated based on the previously uploaded data.">?</span>
                     </div>
                 """, unsafe_allow_html=True)
         
@@ -2620,30 +2715,11 @@ def eoq_smooth2_page():
 
     st.markdown("### Safety Stock & Reorder Point Breakdown")
 
-    col1, col2 , col3 = st.columns(3)
+    col1, col2 = st.columns(2)
 
     with col1:
-        if 'review_period_p' not in st.session_state:
-            st.session_state['review_period_p'] = 1.0  # Default value 1 month
-
-
-        review_period_p = st.number_input(
-            "Review Period (P) in Months",
-            min_value=0.1,
-            max_value=12.0,
-            value=float(st.session_state['review_period_p']),
-            step=0.5,
-            help="The time interval between reviews of inventory levels.",
-            key="p_input_widget"
-        )
-        
-        # 3. Save to session state immediately so it's remembered
-        st.session_state['review_period_p'] = review_period_p
-
-
-    with col2:
         # FIX: Use 'lead_time' instead of 'lead_time_input'
-        formula_text = f"Z: {z_index:.2f} × root(LT): {np.sqrt(lead_time + review_period_p):.2f} × σ error: {sigma_error:.2f}"
+        formula_text = f"Z: {z_index:.2f} × root(LT): {np.sqrt(lead_time):.2f} × σ error: {sigma_error:.2f}"
         
         st.markdown(cost_box(
             "Safety Stock (SS)", 
@@ -2651,7 +2727,7 @@ def eoq_smooth2_page():
             formula_text
         ), unsafe_allow_html=True)
 
-    with col3:
+    with col2:
         formula_text = f"Lead Time: {lead_time:.2f} × Avg Demand: {avg_demand:.2f} + SS: {safety_stock:.2f}"
 
         
@@ -2982,7 +3058,7 @@ def eoq_smooth3_page():
 
         # ================= DISPLAY TOTAL =================
 
-    st.markdown('<hr class="custom-divider">', unsafe_allow_html=True)
+   # st.markdown('<hr class="custom-divider">', unsafe_allow_html=True)
 
 
     # Always update session state at the end
@@ -3001,7 +3077,7 @@ def eoq_smooth3_page():
         st.markdown(f"""
             <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                 padding: -50px; border-radius: 10px; text-align: center; color: white; margin-bottom: 10px; font-weight:bold;'>
-                <h2 style='margin: 0; font-size: 1rem;'>Total Ordering Cost: ${total_ordering_cost:,.2f}</h2>
+                <h2 style='margin: 0; font-size: 2rem;'>Total Ordering Cost: ${total_ordering_cost:,.2f}</h2>
             </div>
         """, unsafe_allow_html=True)
 
@@ -3430,24 +3506,13 @@ def eoq_smooth5_page():
             color = 'red' if val < 0 else 'green'
             return f'color: {color}'
 
-        # Apply the color logic specifically to the numeric column in 'df'
-        # But apply the visual result to 'df_styled'
         if "Total Savings" in df.columns:
-            # Note: subset here refers to the column NAME in the dataframe being styled
             styles = df[["Total Savings"]].applymap(color_savings_negative_red)
-            # We update the dataframe we intend to display with these styles
-            # Since pandas styler works on the underlying data, we create the styler from df_styled 
-            # and 'set_properties' or use apply with subset logic carefully.
             
-            # SIMPLER APPROACH FOR STREAMLIT:
-            # Create a Styler object from the String-formatted DataFrame
             styler = df_styled.style
             
-            # Define a function that takes the value (which is now a string like "$100") 
-            # strips symbols, converts to float, and checks sign.
             def colorize_string_money(s):
                 try:
-                    # Remove '$' and ',' to convert back to number for checking
                     val = float(s.replace('$', '').replace(',', ''))
                     return 'color: red' if val < 0 else 'color: green'
                 except:
@@ -3530,6 +3595,7 @@ def eoq_smooth5_page():
 #============================================================================================================================
 #================================================================================================================================================================
 #============================================================================================================================
+
 
 
 
@@ -3712,19 +3778,8 @@ elif st.session_state.page == "eoq_smooth4":
 elif st.session_state.page == "eoq_smooth5":
     eoq_smooth5_page()
 
-elif st.session_state.page == "eoq_erratic1":
-    eoq_erratic1_page()
-
-elif st.session_state.page == "eoq_erratic2":
-    eoq_erratic2_page()
-
-elif st.session_state.page == "eoq_erratic3":
-    eoq_erratic3_page()
-
 elif st.session_state.page == "supplier report":
     supplier_report_page()
 
 
     
-
-
