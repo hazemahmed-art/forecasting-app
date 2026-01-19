@@ -344,14 +344,14 @@ def page_data():
         # Check if we have a selected material
         if 'selected_material_row' in st.session_state:
             item_code = st.session_state.selected_material_row['Item Code']
-            db_path = "Database/history.xlsx"
+            db_path = "Database/history1.xlsx"
             
             if os.path.exists(db_path):
                 try:
                     # Read the sheet corresponding to the item code
                     df_display = pd.read_excel(db_path, sheet_name=item_code)
                 except ValueError:
-                    st.error(f"Sheet '{item_code}' not found in 'history.xlsx'")
+                    st.error(f"Sheet '{item_code}' not found in 'history1.xlsx'")
                 except Exception as e:
                     st.error(f"Error reading database file: {e}")
             else:
@@ -386,7 +386,7 @@ def page_data():
 
         # ===== RIGHT: Summary =====
         with right_col:
-            num_periods = len(df_display)
+            num_periods = len(df_display)-1
             start_date_raw = df_display.iloc[0, 0] if not df_display.empty else "N/A"
             end_date_raw = df_display.iloc[-1, 0] if not df_display.empty else "N/A"
 
@@ -5398,4 +5398,5 @@ elif st.session_state.page == "erratic_final_summary":
 
 elif st.session_state.page == "supplier report":
     supplier_report_page()
+
 
