@@ -656,26 +656,85 @@ def page_data():
     st.markdown('<div class="big-title">Data & Period Selection</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle" style="margin-bottom: 0rem;">Upload Demand Data & Choose Analysis Period</div>', unsafe_allow_html=True)
 
+    # ===== Inject the SAME table style CSS =====
     st.markdown("""
-        <style>
+    <style>
+        /* General Font Setup */
+        .custom-table-container {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin-bottom: 30px;
+            overflow-x: auto;
+        }
+
+        /* The Table */
+        .modern-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 2px solid #1E88E5; /* Outer border using the requested color */
+            border-radius: 8px;
+            overflow: hidden; /* Ensures border radius works */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        /* Table Headers */
+        .modern-table th {
+            background-color: #1E88E5; /* Blue Header */
+            color: white;
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 1.2em;
+            letter-spacing: 0.5px;
+        }
+
+        /* Table Rows */
+        .modern-table tr.data-row {
+            border-bottom: 1px solid #e0e0e0;
+            transition: background-color 0.2s ease;
+        }
+
+        /* Hover Effect */
+        .modern-table tr.data-row:hover {
+            background-color: #f1f8ff; /* Very light blue hover */
+        }
+
+        /* Table Cells (Default) */
+        .modern-table td {
+            padding: 10px 15px;
+            font-size: 20px;
+            color: #333;
+            border: 1px solid #e0e0e0; /* Light grey borders for info */
+            border-top: none;
+            border-bottom: none;
+        }
+
+        /* Fix First and Last Cell Borders relative to Table Border */
+        .modern-table td:first-child {
+            border-left: none;
+        }
+        .modern-table td:last-child {
+            border-right: none;
+        }
+
+        /* Tight label style (your original) */
         .tight-label {
             margin-bottom: 0px !important;
             display: block;
         }
-        </style>
+    </style>
     """, unsafe_allow_html=True)
 
-
-
-    col1,col2,col3 = st.columns([1,2,2])
+    col1, col2, col3 = st.columns([1, 2, 2])
     with col1:
         st.markdown("""
         <span class="tight-label" style="font-size: 1.5rem; font-weight:bold; color: rgb(21, 101, 192); margin-bottom:10px;">
             Demand Data Source
         </span>
         """, unsafe_allow_html=True)
-    with col2: 
-    # Radio Button: Database vs Upload
+
+    with col2:
+        # Radio Button: Database vs Upload
         data_source_option = st.radio(
             "",
             ["Use demand history in data base", "Upload another file"],
@@ -705,7 +764,7 @@ def page_data():
         if 'selected_material_row' in st.session_state:
             item_code = st.session_state.selected_material_row['Item Code']
             db_path = "Database/aaai demand history.xlsx"
-            
+
             if os.path.exists(db_path):
                 try:
                     # Read the sheet corresponding to the item code
@@ -722,7 +781,7 @@ def page_data():
     # ---------------- DISPLAY TABLE AND SUMMARY ----------------
     # Only display if we have data to show (either from DB or Upload)
     if not df_display.empty:
-        st.markdown("<br>", unsafe_allow_html=True) # Spacing
+        st.markdown("<br>", unsafe_allow_html=True)  # Spacing
         left_col, right_col = st.columns([2, 1])
 
         # ===== LEFT: Table =====
@@ -734,19 +793,30 @@ def page_data():
             except:
                 pass
 
-            styled_df = df_copy.style.set_properties(**{
-                'font-size': '14pt',     
-                'font-weight': '400',     
-                'text-align': 'center'    
-            }).set_table_styles([
-                {'selector': 'th', 'props': [('font-size', '16px'), ('font-weight', 'bold')]}
-            ])
+            # Build HTML table using the same "modern-table" style
+            table_html = '<div class="custom-table-container"><table class="modern-table">'
 
-            st.dataframe(styled_df, height=300, use_container_width=True)
+            # Header
+            table_html += '<thead><tr>'
+            for col in df_copy.columns:
+                table_html += f'<th>{col}</th>'
+            table_html += '</tr></thead><tbody>'
+
+            # Rows
+            for _, row in df_copy.iterrows():
+                table_html += '<tr class="data-row">'
+                for col in df_copy.columns:
+                    val = row[col]
+                    table_html += f'<td>{val}</td>'
+                table_html += '</tr>'
+
+            table_html += '</tbody></table></div>'
+
+            st.markdown(table_html, unsafe_allow_html=True)
 
         # ===== RIGHT: Summary =====
         with right_col:
-            num_periods = len(df_display) -1
+            num_periods = len(df_display) - 1
             start_date_raw = df_display.iloc[0, 0] if not df_display.empty else "N/A"
             end_date_raw = df_display.iloc[-1, 0] if not df_display.empty else "N/A"
 
@@ -813,13 +883,11 @@ def page_data():
                 else:
                     st.warning("No demand history data found in database for this item.")
 
-
             if is_data_valid:
-                
                 # 1. Save the dataframe
                 st.session_state.df = final_df
-                st.session_state['df_uploaded'] = final_df 
-                
+                st.session_state['df_uploaded'] = final_df
+
                 # 3. Save source info
                 st.session_state.data_source = data_source_option
                 if data_source_option == "Upload another file":
@@ -831,9 +899,6 @@ def page_data():
                 st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
-
-
-
 
 # =====================================================================================================================
 # ============================================ middle first page  ================================================
@@ -6389,4 +6454,5 @@ if st.session_state.logged_in:
 
     elif st.session_state.page == "supplier report":
         supplier_report_page()
+
 
