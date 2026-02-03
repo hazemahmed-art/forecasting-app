@@ -15,7 +15,131 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 
-st.set_page_config(layout="wide")
+
+
+# ========================= Page Config =========================
+st.set_page_config(page_title="Material Selection", layout="wide")
+
+# ========================= Session State Initialization =========================
+# Initialize state variables
+if "page" not in st.session_state:
+    st.session_state.page = "landing"  # Initial page is landing
+
+if "df" not in st.session_state:
+    st.session_state.df = None
+
+if "period" not in st.session_state:
+    st.session_state.period = None
+
+if "uploaded_file_name" not in st.session_state:
+    st.session_state.uploaded_file_name = None
+
+if "role" not in st.session_state:
+    st.session_state.role = None
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+
+# ========================= AUTHENTICATION LOGIC =========================
+def check_credentials(username, password, selected_role):
+    """Checks if user exists in Database folder and matches role."""
+    
+    # 1. Define possible file names
+    db_folder = "Database"
+    possible_filenames = ["users.csv", "users.xlsx", "users.xls"] # Added .xls just in case
+    
+    db_path = None
+    file_type = None
+    
+    # Check if Database folder exists
+    if not os.path.exists(db_folder):
+        st.error(f"Database folder not found at {os.path.abspath(db_folder)}")
+        return False
+
+    # Find the file
+    for filename in possible_filenames:
+        temp_path = os.path.join(db_folder, filename)
+        if os.path.exists(temp_path):
+            db_path = temp_path
+            file_type = "csv" if filename.endswith(".csv") else "excel"
+            break
+            
+    if db_path is None:
+        st.error(f"User file not found in {db_folder}. Looking for 'users.csv', 'users.xlsx', or 'users.xls'.")
+        return False
+
+    try:
+        # 2. READ THE FILE
+        if file_type == "csv":
+            df_users = pd.read_csv(db_path)
+        else:
+            df_users = pd.read_excel(db_path)
+        
+        # ---------------------------------------------------------
+        # DEBUGGING: Print the columns found in your file to Terminal
+        # ---------------------------------------------------------
+        print(f"DEBUG: Columns found in file: {list(df_users.columns)}")
+        # ---------------------------------------------------------
+
+        # 3. CLEAN THE DATA
+        # Remove all spaces from headers and convert to lowercase
+        df_users.columns = [c.strip().lower().replace(" ", "") for c in df_users.columns]
+        
+        # Clean the actual data: remove spaces, convert to lowercase
+        for col in df_users.columns:
+            df_users[col] = df_users[col].astype(str).str.strip().str.lower()
+
+        # 4. FIND THE CORRECT COLUMNS (Flexible Mapping)
+        # We need to find columns that contain 'username', 'password', 'role'
+        col_user = None
+        col_pass = None
+        col_role = None
+
+        for col in df_users.columns:
+            if "username" in col or "user" in col:
+                col_user = col
+            if "password" in col or "pass" in col:
+                col_pass = col
+            if "role" in col:
+                col_role = col
+        
+        # Check if we found all columns
+        if not all([col_user, col_pass, col_role]):
+            st.error(f"Could not find user columns. Found: {list(df_users.columns)}")
+            return False
+
+        # 5. VERIFY CREDENTIALS
+        # Clean the input
+        username_clean = str(username).strip().lower()
+        password_clean = str(password).strip().lower()
+        role_clean = str(selected_role).strip().lower()
+        
+        # Note: Ensure 'middle' maps to the correct role in your database.
+        # If your DB says 'Middle Level', role_clean is 'middle', so partial match is safer:
+        
+        # Filter for matching user
+        user_match = df_users[
+            (df_users[col_user] == username_clean) & 
+            (df_users[col_pass] == password_clean) & 
+            # Check if the role in DB contains the input role (e.g. "middle" inside "middle level")
+            (df_users[col_role].str.contains(role_clean))
+        ]
+        
+        if not user_match.empty:
+            print(f"DEBUG: Login successful for {username_clean}")
+            return True
+        else:
+            print(f"DEBUG: Login failed. Input: {username_clean}/{role_clean}")
+            return False
+
+    except Exception as e:
+        st.error(f"Error reading database: {e}")
+        import traceback
+        print(traceback.format_exc()) # Print full error to terminal
+        return False
+
+
 #==================================================help sign
 st.markdown("""
 <style>
@@ -76,14 +200,6 @@ css = """
 
 st.markdown(css, unsafe_allow_html=True)
 
-#def show_logo():
-#    logo = Image.open("images/logo.jpeg")
-#    col1, col2 = st.columns([1, 12])
-#    with col1:
-#        st.image(logo, width=80)
-#    with col2:
-#        st.write("")  # spacer
-#show_logo()
 
 def info_card(title, items):
     st.subheader(title)
@@ -97,23 +213,6 @@ def info_card(title, items):
             </div>
             """, unsafe_allow_html=True)
 
-# ========================= Page Config =========================
-st.set_page_config(page_title="Material Selection", layout="wide")
-
-# ========================= Session =========================
-if "page" not in st.session_state:
-    st.session_state.page = "material"
-
-if "df" not in st.session_state:
-    st.session_state.df = None
-
-if "period" not in st.session_state:
-    st.session_state.period = None
-
-if "uploaded_file_name" not in st.session_state:
-    st.session_state.uploaded_file_name = None
-
-
 
 # ========================= Load External CSS =========================
 def load_css(file_name):
@@ -125,9 +224,230 @@ def load_css(file_name):
 
 load_css("style.css")
 
-import os
-import pandas as pd
-import streamlit as st
+
+
+# ========================= PAGE: LANDING (Role Selection) =========================
+if st.session_state.page == "landing":
+    # CSS Styling for the buttons to make them attractive
+    st.markdown("""
+        <style>
+        div.stButton > button:first-child {
+            width: 60em !important;
+            white-space: normal;
+            background-color: #0099ff;
+            color: white;
+            font-size: 15px !important;
+            margin-bottom:20px;
+            height: 5em;
+            border-radius: 10px;
+            border: none;
+            box-shadow: 0px 4px 6px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            display: block;
+        }
+        div.stButton > button:hover {
+            background-color: #007acc;
+            transform: translateY(-2px);
+            box-shadow: 0px 6px 8px rgba(0,0,0,0.3);
+        }
+        /* Specifically target the button text */
+        div.stButton > button:first-child p {
+            font-size: 25px !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    # Display Welcome Message
+    st.markdown('<div class="big-title">Welcome To The System</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Please enter your role to continue</div>', unsafe_allow_html=True)
+    
+    # Create 3 columns for the buttons (Center aligned)
+    col1, col2, col3 = st.columns([1,3,1])
+    with col2:
+        # Button shows "Top Management" but sets role to "admin" (matches database)
+        if st.button("Top Management", use_container_width=False):
+            st.session_state.role = "admin"
+            st.success("Welcome, Top Management!")
+            st.session_state.page = "login"
+            st.rerun()
+            
+        # Button shows "Middle" and sets role to "middle" (matches database)
+        if st.button("Middle Level", use_container_width=False):
+            st.session_state.role = "middle"
+            st.success("Welcome, Middle Management!")
+            st.session_state.page = "login"
+            st.rerun()
+            
+        # Button shows "Specialist" but sets role to "user" (matches database)
+        if st.button("Specialist", use_container_width=False):
+            st.session_state.role = "user"
+            st.success("Welcome, Specialist!")
+            st.session_state.page = "login"
+            st.rerun()
+    st.stop() 
+
+
+# ========================= PAGE: LOGIN =========================
+if st.session_state.page == "login":
+    # Custom CSS for attractive login styling
+    st.markdown("""
+    <style>
+    /* Login form container with blue border and shadow */
+    div[data-testid="stForm"] {
+        background: #ffffff;
+        padding: 3rem 2.5rem;
+        border-radius: 20px;
+        border: 3px solid #1E88E5;
+        box-shadow: 0 15px 35px rgba(30, 136, 229, 0.3), 
+                    0 5px 15px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(10px);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    div[data-testid="stForm"]:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 45px rgba(30, 136, 229, 0.4), 
+                    0 10px 20px rgba(0, 0, 0, 0.15);
+    }
+    
+    /* Input labels */
+    div[data-testid="stForm"] label {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #1E88E5;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Input fields */
+    div[data-testid="stForm"] input {
+        border: 2px solid #e3f2fd;
+        border-radius: 12px;
+        padding: 0.85rem 1.2rem;
+        font-size: 1.5rem;
+        transition: all 0.3s ease;
+        background: #f8fbff;
+    }
+    
+    div[data-testid="stForm"] input:focus {
+        border-color: #1E88E5;
+        box-shadow: 0 0 0 4px rgba(30, 136, 229, 0.15);
+        background: #ffffff;
+        outline: none;
+    }
+    
+    /* Login button */
+    div[data-testid="stForm"] button[kind="primary"] {
+        background: linear-gradient(135deg, #1E88E5 0%, #1565c0 100%);
+        color: white;
+        font-weight: 600;
+        font-size: 1.1rem;
+        padding: 0.95rem 2rem;
+        border-radius: 12px;
+        border: none;
+        margin-top: 1.5rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 6px 20px rgba(30, 136, 229, 0.4);
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+    
+    div[data-testid="stForm"] button[kind="primary"]:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 25px rgba(30, 136, 229, 0.5);
+        background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+    }
+    
+    /* Back button styling */
+    div.stButton > button:not([kind="primary"]) {
+        background: transparent;
+        color: #1E88E5;
+        font-weight: 500;
+        font-size: 1rem;
+        padding: 0.75rem 1.5rem;
+        border-radius: 10px;
+        border: 2px solid #1E88E5;
+        margin-top: 2rem;
+        transition: all 0.3s ease;
+    }
+    
+    div.stButton > button:not([kind="primary"]):hover {
+        background: #1E88E5;
+        color: white;
+        transform: translateY(-1px);
+        box-shadow: 0 5px 15px rgba(30, 136, 229, 0.3);
+    }
+    
+    /* Alert messages */
+    .stAlert {
+        border-radius: 12px;
+        border-left: 4px solid;
+        padding: 1rem 1.5rem;
+        margin-top: 1rem;
+        font-weight: 500;
+    }
+    
+    /* Success message */
+    div[data-baseweb="notification"][kind="success"] {
+        background: #e8f5e9;
+        border-left-color: #4caf50;
+        color: #2e7d32;
+    }
+    
+    /* Error message */
+    div[data-baseweb="notification"][kind="error"] {
+        background: #ffebee;
+        border-left-color: #f44336;
+        color: #c62828;
+    }
+    
+    /* Add spacing between form elements */
+    div[data-testid="stForm"] > div {
+        margin-bottom: 1.5rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('<div class="big-title">Secure Access Portal</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Please authenticate to continue</div>', unsafe_allow_html=True)
+    
+    # Center the login form
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        with st.form("login_form"):
+            username = st.text_input("Username", placeholder="Enter your username")
+            password = st.text_input("Password", type="password", placeholder="Enter your password")
+            submit_button = st.form_submit_button("Login", use_container_width=True, type="primary")
+            
+            if submit_button:
+                if check_credentials(username, password, st.session_state.role):
+                    st.session_state.logged_in = True
+                    user_role = st.session_state.get("role")
+                    if user_role == "user":
+                        # ================= FIXED: EVERYONE GOES TO "material" PAGE =================
+                        st.session_state.page = "Material Selection"
+                        st.rerun()
+                    elif user_role == "middle":
+                        # ================= FIXED: EVERYONE GOES TO "material" PAGE =================
+                        st.session_state.page = "Material Selection"
+                        st.rerun()
+                    else:
+                        # ================= FIXED: EVERYONE GOES TO "material" PAGE =================
+                        st.session_state.page = "top manager"
+                        st.rerun()
+                else:
+                    st.error(f"Error reading uploaded file")
+                    st.rerun()
+
+        # Back button centered
+        if st.button("← Back to Role Selection", use_container_width=True):
+            st.session_state.role = None
+            st.session_state.page = "landing"
+            st.rerun()
+        
+    st.stop()
+
 
 # =====================================================================================================================
 # ============================================ PAGE 1 : MATERIAL SELECTION ============================================
@@ -250,7 +570,7 @@ def page_material():
         with col2:
           st.markdown(f"""
             <div style="
-                padding: 1rem; border-radius: 10px; margin-bottom: 19px; border-left: 5px solid #1E88E5; background-color: rgb(240 242 253 / 31%); font-size: 1.2rem; font-weight: bold; color: #1E88E5;
+                padding: 0.5rem; border-radius: 10px; margin-bottom: 5px; border-left: 5px solid #1E88E5; background-color: rgb(240 242 253 / 31%); font-size: 1.6rem; font-weight: bold; color: #1E88E5;
             ">
                 {row['Item Code']} - {row['Item Family']} ({row['Item Type']} - Grade {row['Grade']})
             </div>
@@ -265,30 +585,70 @@ def page_material():
                 value = row[col_name] if pd.notna(row[col_name]) else "Not available"
                 with cols[j]:
                     st.markdown(f"""
-                    <div style="border: 1px solid #ddd; padding: 0.5rem; border-radius: 5px; margin-bottom: 19px;">
+                    <div style="border: 1px solid #1E88E5; padding: 0.5rem; border-radius: 5px; margin-bottom: 19px;">
                         <span class="detail-label" style="font-weight:bold;">{col_name}:</span><br>
-                        <span style="font-size: 1rem; color: #555;">{value}</span>
+                        <span style="font-size: 1.4rem; color: #555;">{value}</span>
                     </div>
                     """, unsafe_allow_html=True)
     
     st.markdown('<div class="next-btn-container">', unsafe_allow_html=True)
-    col_left, col_right = st.columns([6, 1])
+
+
+    user_role = st.session_state.get("role", "admin")
+
+    col_left, col_middle , col_right = st.columns([1, 4, 1])
+
+    with col_left:
+        if st.button("← Back", use_container_width=True):
+            st.session_state.page = "landing"
+            st.rerun()
+
+
     with col_right:
         if st.button("Next → Data Uploading", type="primary", use_container_width=True):
             if selected_code == CODE_PLACEHOLDER:
                 st.warning("Please select an Item Code to proceed.")
             else:
-                row = filtered_df[filtered_df['Item Code'] == selected_code].iloc[0]
+                user_role = st.session_state.get("role")
                 
-                # ================= SAVE DATA =================
-                st.session_state.selected_material_row = row
-                
-                # --- SAVE PURCHASING UNIT SPECIFICALLY ---
-                # This saves the purchasing unit to a specific key so you can find it easily later
-                st.session_state['selected_purchasing_unit'] = row['Purchasing Unit']
-                st.session_state.page = "data"
-                st.rerun()
+                if user_role == "user":
+                    # ================= SAVE SECTION =================
+                    # 1. Get the row as a Dictionary
+                    material_data_dict = filtered_df[filtered_df['Item Code'] == selected_code].iloc[0].to_dict()
+                    
+                    # 2. Save to session state
+                    # 'selected_material_info' is the key we will use in the other file
+                    st.session_state.selected_material_info = material_data_dict
+                    st.session_state.selected_material_row = material_data_dict  # <-- ADD THIS LINE
+                    
+                    # 3. Explicitly save specific values if you prefer (optional but handy)
+                    st.session_state.selected_purchasing_unit = material_data_dict['Purchasing Unit']
+                    
+                    # 4. Change page
+                    st.session_state.page = "data"
+                    st.rerun()
+
+                elif user_role == "middle":
+                    # ================= FIX: Save material_data_dict before navigating =================
+                    material_data_dict = filtered_df[filtered_df['Item Code'] == selected_code].iloc[0].to_dict()
+                    st.session_state.selected_material_info = material_data_dict
+                    st.session_state.selected_material_row = material_data_dict  # <-- ADD THIS LINE
+                    # ===============================================================================
+                    st.session_state.page = "material_excel"
+                    st.rerun()
+                    
+                else:
+                    # Default for admin/others
+                    material_data_dict = filtered_df[filtered_df['Item Code'] == selected_code].iloc[0].to_dict()
+                    st.session_state.selected_material_info = material_data_dict
+                    st.session_state.selected_material_row = material_data_dict  # <-- ADD THIS LINE
+                    st.session_state.page = "data"
+                    st.rerun()
+
     st.markdown('</div>', unsafe_allow_html=True)
+
+
+
 # =====================================================================================================================
 # ============================================ PAGE 2 : DATA & PERIOD ================================================
 # =====================================================================================================================
@@ -344,14 +704,14 @@ def page_data():
         # Check if we have a selected material
         if 'selected_material_row' in st.session_state:
             item_code = st.session_state.selected_material_row['Item Code']
-            db_path = "Database/aai demand history.xlsx"
+            db_path = "Database/aaai demand history.xlsx"
             
             if os.path.exists(db_path):
                 try:
                     # Read the sheet corresponding to the item code
                     df_display = pd.read_excel(db_path, sheet_name=item_code)
                 except ValueError:
-                    st.error(f"Sheet '{item_code}' not found in 'aai demand history.xlsx'")
+                    st.error(f"Sheet '{item_code}' not found in 'aaai demand history.xlsx'")
                 except Exception as e:
                     st.error(f"Error reading database file: {e}")
             else:
@@ -386,7 +746,7 @@ def page_data():
 
         # ===== RIGHT: Summary =====
         with right_col:
-            num_periods = len(df_display)-1
+            num_periods = len(df_display) -1
             start_date_raw = df_display.iloc[0, 0] if not df_display.empty else "N/A"
             end_date_raw = df_display.iloc[-1, 0] if not df_display.empty else "N/A"
 
@@ -471,7 +831,626 @@ def page_data():
                 st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
+
+
+
+
+# =====================================================================================================================
+# ============================================ middle first page  ================================================
+# =====================================================================================================================
+
+def page_material_excel():
+    st.markdown('<div class="big-title">Material Cost History</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Average Unit Price by Supplier and Year</div>', unsafe_allow_html=True)
+
+    if "selected_material_row" not in st.session_state:
+        st.warning("No material selected. Please go back.")
+        return
+
+    item_code = st.session_state.selected_material_row["Item Code"]
+    db_path = "Database/ai demand history.xlsx"
+
+    if not os.path.exists(db_path):
+        st.error("Demand history database not found.")
+        return
+
+    try:
+        df = pd.read_excel(db_path, sheet_name=item_code)
+    except ValueError:
+        st.error(f"No sheet found for Item Code: {item_code}")
+        return
+
+    # ================= VALIDATION =================
+    required_cols = ["date", "supplier", "quantity received", "price received"]
+    missing_cols = [c for c in required_cols if c not in df.columns]
+
+    if missing_cols:
+        st.error(f"Missing columns in Excel file: {missing_cols}")
+        return
+
+    # ================= DATA PREPARATION =================
+    df["date"] = pd.to_datetime(df["date"])
+    df["Year"] = df["date"].dt.year
+
+    df["Total Price"] = df["quantity received"] * df["price received"]
+
+    # ================= AGGREGATION =================
+    agg_df = (
+        df
+        .groupby(["Year", "supplier"], as_index=False)
+        .agg(
+            total_price=("Total Price", "sum"),
+            total_quantity=("quantity received", "sum"),
+            avg_service_level=("service level", "mean")
+        )
+    )
+
+    agg_df["Avg Unit Price"] = agg_df["total_price"] / agg_df["total_quantity"]
+
+
+    # ================= DISPLAY RAW DATA =================
+    st.subheader(f"Item Code: {item_code}")
+    st.dataframe(df, use_container_width=True)
+
+    # ================= GROUPED BAR CHART =================
+    st.subheader("Average Unit Price per Supplier (Grouped by Year)")
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    years = sorted(agg_df["Year"].unique())
+    suppliers = sorted(agg_df["supplier"].unique())
+
+    bar_width = 0.8 / len(suppliers)
+    x = np.arange(len(years))
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+
+    for i, supplier in enumerate(suppliers):
+        supplier_data = agg_df[agg_df["supplier"] == supplier]
+
+        values = [
+            supplier_data[supplier_data["Year"] == year]["Avg Unit Price"].values[0]
+            if year in supplier_data["Year"].values else 0
+            for year in years
+        ]
+
+        ax.bar(
+            x + i * bar_width,
+            values,
+            width=bar_width,
+            label=supplier
+        )
+
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Average Unit Price")
+    ax.set_title("Supplier Price Comparison by Year")
+
+    ax.set_xticks(x + bar_width * (len(suppliers) - 1) / 2)
+    ax.set_xticklabels(years)
+
+    ax.legend(title="supplier", bbox_to_anchor=(1.02, 1), loc="upper left")
+
+    st.pyplot(fig)
+
+#-----------------------------------
+    st.subheader("Total Quantity Received per Supplier (Grouped by Year)")
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    years = sorted(agg_df["Year"].unique())
+    suppliers = sorted(agg_df["supplier"].unique())
+
+    bar_width = 0.8 / len(suppliers)
+    x = np.arange(len(years))
+
+    fig_qty, ax_qty = plt.subplots(figsize=(12, 5))
+
+    for i, supplier in enumerate(suppliers):
+        supplier_data = agg_df[agg_df["supplier"] == supplier]
+
+        values = [
+            supplier_data[supplier_data["Year"] == year]["total_quantity"].values[0]
+            if year in supplier_data["Year"].values else 0
+            for year in years
+        ]
+
+        ax_qty.bar(
+            x + i * bar_width,
+            values,
+            width=bar_width,
+            label=supplier
+        )
+
+    ax_qty.set_xlabel("Year")
+    ax_qty.set_ylabel("Total Quantity Received")
+    ax_qty.set_title("Supplier Quantity Comparison by Year")
+
+    ax_qty.set_xticks(x + bar_width * (len(suppliers) - 1) / 2)
+    ax_qty.set_xticklabels(years)
+
+    ax_qty.legend(title="supplier", bbox_to_anchor=(1.02, 1), loc="upper left")
+
+    st.pyplot(fig_qty)
+
+
+#------------------------
+    # ================= GROUPED BAR CHART (SERVICE LEVEL) =================
+    st.subheader("Average Service Level per Supplier (Grouped by Year)")
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    years = sorted(agg_df["Year"].unique())
+    suppliers = sorted(agg_df["supplier"].unique())
+
+    bar_width = 0.8 / len(suppliers)
+    x = np.arange(len(years))
+
+    fig_sl, ax_sl = plt.subplots(figsize=(12, 5))
+
+    for i, supplier in enumerate(suppliers):
+        supplier_data = agg_df[agg_df["supplier"] == supplier]
+
+        values = [
+            supplier_data[supplier_data["Year"] == year]["avg_service_level"].values[0]
+            if year in supplier_data["Year"].values else 0
+            for year in years
+        ]
+
+        ax_sl.bar(
+            x + i * bar_width,
+            values,
+            width=bar_width,
+            label=supplier
+        )
+
+    ax_sl.set_xlabel("Year")
+    ax_sl.set_ylabel("Average Service Level")
+    ax_sl.set_title("Supplier Service Level Comparison by Year")
+
+    ax_sl.set_xticks(x + bar_width * (len(suppliers) - 1) / 2)
+    ax_sl.set_xticklabels(years)
+
+    ax_sl.legend(title="Supplier", bbox_to_anchor=(1.02, 1), loc="upper left")
+
+    st.pyplot(fig_sl)
+
+#----------------------------------------
+    # ================= GROUPED BAR CHART – AVERAGE LEAD TIME =================
+    st.subheader("Average Lead Time per Supplier (Grouped by Year)")
+
+    # Check if the column exists
+    lead_time_col = None
+    possible_names = ["lead time", "Lead Time", "lead_time", "LeadTime", "delivery days", "leadtime"]
+
+    for col in df.columns:
+        if col.lower().replace(" ", "") in [n.lower().replace(" ", "") for n in possible_names]:
+            lead_time_col = col
+            break
+
+    if not lead_time_col:
+        st.warning("Column 'lead time' (or similar) not found in the data → skipping lead time chart.")
+    else:
+        # Add average lead time to aggregation
+        agg_df["avg_lead_time"] = df.groupby(["Year", "supplier"])[lead_time_col].mean().values
+
+        import matplotlib.pyplot as plt
+        import numpy as np
+
+        years = sorted(agg_df["Year"].unique())
+        suppliers = sorted(agg_df["supplier"].unique())
+
+        bar_width = 0.8 / len(suppliers)
+        x = np.arange(len(years))
+
+        fig_lt, ax_lt = plt.subplots(figsize=(12, 5))
+
+        for i, supplier in enumerate(suppliers):
+            supplier_data = agg_df[agg_df["supplier"] == supplier]
+
+            values = []
+            for year in years:
+                match = supplier_data[supplier_data["Year"] == year]
+                if not match.empty:
+                    values.append(match["avg_lead_time"].iloc[0])
+                else:
+                    values.append(0)   # or np.nan if you prefer gaps
+
+            ax_lt.bar(
+                x + i * bar_width,
+                values,
+                width=bar_width,
+                label=supplier
+            )
+
+        ax_lt.set_xlabel("Year")
+        ax_lt.set_ylabel("Average Lead Time (days)")
+        ax_lt.set_title("Supplier Lead Time Comparison by Year")
+
+        ax_lt.set_xticks(x + bar_width * (len(suppliers) - 1) / 2)
+        ax_lt.set_xticklabels(years)
+
+        ax_lt.legend(title="Supplier", bbox_to_anchor=(1.02, 1), loc="upper left")
+
+        # Optional: better grid & formatting
+        ax_lt.grid(axis='y', linestyle='--', alpha=0.5)
+        ax_lt.set_axisbelow(True)
+
+        st.pyplot(fig_lt)
+
+#-------------------------------
+# ================= TOTAL QUANTITY RECEIVED PER YEAR (SIMPLE BAR CHART) =================
+# ================= TOTAL QUANTITY RECEIVED PER YEAR =================
+    st.subheader("Total Quantity Received per Year")
+
+    yearly_total = (
+        df
+        .groupby("Year", as_index=False)
+        .agg(total_quantity=("quantity received", "sum"))
+        .sort_values("Year")
+    )
+
+    if yearly_total.empty:
+        st.info("No quantity data available.")
+    else:
+        import matplotlib.pyplot as plt
+        from matplotlib.ticker import FuncFormatter
+
+        # Real historical years
+        real_years = yearly_total["Year"].astype(int).tolist()
+        real_quantities = yearly_total["total_quantity"].tolist()
+
+        # Add "This Year" as extra bar
+        all_labels = [str(y) for y in real_years] + ["This Year"]
+        all_values  = real_quantities + [40000]
+
+        # Positions: years consecutive, then small gap before "This Year"
+        x_positions = list(range(len(real_years))) + [len(real_years) + 0.7]
+
+        fig, ax = plt.subplots(figsize=(10, 5.5))
+
+        bars = ax.bar(
+            x_positions,
+            all_values,
+            color = ["#4CAF50"] * len(real_years) + ["#FF7043"],   # different color for This Year
+            width = 0.68,
+            edgecolor = "black",
+            linewidth = 0.8
+        )
+
+        # Value labels on top
+        for bar in bars:
+            h = bar.get_height()
+            ax.text(
+                bar.get_x() + bar.get_width()/2.,
+                h,
+                f"{int(h):,}",
+                ha='center',
+                va='bottom',
+                fontsize=10,
+                fontweight='bold'
+            )
+
+        ax.set_xticks(x_positions)
+        ax.set_xticklabels(all_labels)
+
+        ax.set_xlabel("Year")
+        ax.set_ylabel("Total Quantity Received")
+        ax.set_title("Annual Total Quantity Received")
+
+        ax.grid(axis='y', linestyle='--', alpha=0.4)
+        ax.set_axisbelow(True)
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda x, _: format(int(x), ",")))
+
+        plt.tight_layout()
+        st.pyplot(fig)
+#-----------------------------------------------------
+# ================= AVERAGE (QUANTITY × PRICE) PER YEAR =================
+# ================= AVERAGE (QUANTITY × PRICE) PER YEAR =================
+    st.subheader("Average Receipt Value per Year (Qty × Price per record)")
+
+    yearly_avg_value = (
+        df
+        .groupby("Year", as_index=False)
+        .agg(
+            avg_receipt_value=("Total Price", "mean"),
+            count_records=("Total Price", "count")
+        )
+        .sort_values("Year")
+    )
+
+    if yearly_avg_value.empty:
+        st.info("No price/quantity data available for this calculation.")
+    else:
+        import matplotlib.pyplot as plt
+        from matplotlib.ticker import FuncFormatter
+
+        # Real historical years
+        real_years = yearly_avg_value["Year"].astype(int).tolist()
+        real_avg_values = yearly_avg_value["avg_receipt_value"].tolist()
+        real_counts = yearly_avg_value["count_records"].tolist()
+
+        # Add "This Year" bar
+        all_labels = [str(y) for y in real_years] + ["This Year"]
+        all_values = real_avg_values + [150000]
+        
+        # Positions: consecutive for history, small gap before "This Year"
+        x_positions = list(range(len(real_years))) + [len(real_years) + 0.7]
+
+        fig_avg, ax_avg = plt.subplots(figsize=(10, 5.5))
+
+        bars = ax_avg.bar(
+            x_positions,
+            all_values,
+            color=["#FF9800"] * len(real_years) + ["#E91E63"],   # orange historical → pink/magenta for This Year
+            width=0.68,
+            edgecolor="black",
+            linewidth=0.9
+        )
+
+        # Value labels on top of each bar
+        for i, bar in enumerate(bars):
+            height = bar.get_height()
+            count_text = f"n={real_counts[i]}" if i < len(real_counts) else ""
+            
+            # Main value
+            ax_avg.text(
+                bar.get_x() + bar.get_width()/2,
+                height,
+                f"{height:,.0f}" if height >= 100 else f"{height:,.1f}",
+                ha="center",
+                va="bottom",
+                fontsize=10,
+                fontweight="bold",
+                color="#111"
+            )
+            
+            # Small record count note (only for real years)
+            if count_text:
+                ax_avg.text(
+                    bar.get_x() + bar.get_width()/2,
+                    height * 0.92 if height > 0 else 0,
+                    count_text,
+                    ha="center",
+                    va="top",
+                    fontsize=9,
+                    color="#555"
+                )
+
+        ax_avg.set_xticks(x_positions)
+        ax_avg.set_xticklabels(all_labels)
+
+        ax_avg.set_xlabel("Year", fontsize=12)
+        ax_avg.set_ylabel("Average Receipt Value\n(Qty × Unit Price)", fontsize=12)
+        ax_avg.set_title("Average Value per Receipt / Delivery Event per Year", fontsize=14, pad=15)
+
+        ax_avg.grid(axis="y", linestyle="--", alpha=0.35)
+        ax_avg.set_axisbelow(True)
+
+        # Thousands separator
+        ax_avg.yaxis.set_major_formatter(FuncFormatter(lambda x, p: format(int(x), ",")))
+
+        plt.tight_layout()
+        st.pyplot(fig_avg)
+
+        st.caption("• \"This Year\" shows a fixed reference value of 2000 (not calculated from data)")
+        
+    # ================= NAVIGATION =================
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    col_back, col_next = st.columns([1, 1])
+
+    with col_back:
+        if st.button("← Back"):
+            st.session_state.page = "Material Selection"
+            st.rerun()
+
+    with col_next:
+        if st.button("Continue → Data Uploading", type="primary"):
+            st.session_state.page = "data"
+            st.rerun()
+
+
+
+
+# =====================================================================================================================
+# ============================================ PAGE 3 : ANALYSIS ====================================================
+# =====================================================================================================================
+import streamlit as st
+import pandas as pd
+import os
+
+st.markdown("""
+<style>
+    /* General Font Setup */
+    .custom-table-container {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        margin-bottom: 30px;
+        overflow-x: auto;
+    }
+
+    /* The Table */
+    .modern-table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 2px solid #1E88E5; /* Outer border using the requested color */
+        border-radius: 8px;
+        overflow: hidden; /* Ensures border radius works */
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    /* Table Headers */
+    .modern-table th {
+        background-color: #1E88E5; /* Blue Header */
+        color: white;
+        padding: 12px 15px;
+        text-align: left;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 1.2em;
+        letter-spacing: 0.5px;
+    }
+
+    /* Specific Logic for Header Borders (Removing divider between Mat Name and SKU) */
+    .modern-table th.mat-name-header {
+        border-right: 1px solid #1E88E5; /* Blend with background or remove */
+    }
+    .modern-table th.sku-header {
+        border-left: none; /* No border between Mat Name and SKU */
+    }
+
+    /* Table Rows */
+    .modern-table tr.data-row {
+        border-bottom: 1px solid #e0e0e0;
+        transition: background-color 0.2s ease;
+    }
+
+    /* Hover Effect */
+    .modern-table tr.data-row:hover {
+        background-color: #f1f8ff; /* Very light blue hover */
+    }
+
+    /* Table Cells (Default) */
+    .modern-table td {
+        padding: 10px 15px;
+        font-size:20px;
+        color: #333;
+        border: 1px solid #e0e0e0; /* Light grey borders for info */
+        border-top: none;
+        border-bottom: none;
+    }
+
+    /* 
+       REQUIREMENT: 
+       "First columns (Material Name) with outer border, below it info in rows.
+       All information in same row with outer border EXCEPT Material Name.
+       All material name as column be in one border."
+    */
+
+    /* 1. Material Name Cell Styling */
+    .modern-table td.mat-name-cell {
+        border: none !important; /* Remove individual cell border */
+        background-color: #f9f9f9; /* Slight tint to distinguish the "column" area */
+        font-weight: bold;
+        color: #1565C0; /* Darker blue for text */
+    }
+
+    /* 2. SKU Cell Styling (Neighbor to Material Name) */
+    .modern-table td.sku-cell {
+        border-left: none !important; /* Remove vertical divider between Mat Name and SKU */
+    }
+
+    /* 3. Fix First and Last Cell Borders relative to Table Border */
+    .modern-table td:first-child {
+        border-left: none;
+    }
+    .modern-table td:last-child {
+        border-right: none;
+    }
+
+    /* Type Title Styling */
+    .section-title {
+        color: #1E88E5;
+        font-size: 34px;
+        font-weight: 700;
+        margin-top: 30px;
+        margin-bottom: 15px;
+        border-left: 5px solid #1E88E5;
+        padding-left: 10px;
+    }
     
+
+
+</style>
+""", unsafe_allow_html=True)
+
+
+def top_page():
+    st.markdown('<div class="big-title">Top Management Reveiw</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Review the Dataset Before & After Cleaning </div>', unsafe_allow_html=True)
+
+
+    # Configuration
+    folder_path = 'Database'
+    file_name = 'master.xlsx'
+    file_path = os.path.join(folder_path, file_name)
+
+    # Check if file exists
+    if os.path.exists(file_path):
+        try:
+            # Read the Excel file
+            df = pd.read_excel(file_path)
+            df.columns = df.columns.str.strip()
+
+            # Check if 'Type' column exists
+            if 'Type' in df.columns:
+                types = df['Type'].unique()
+
+                for t in types:
+                    # Display attractive Section Title
+                    st.markdown(f'<div class="section-title">Type: {t}</div>', unsafe_allow_html=True)
+                    
+                    df_type = df[df['Type'] == t]
+
+                    # Custom HTML Table Generation
+                    table_html = f'<div class="custom-table-container"><table class="modern-table">'
+                    
+                    # --- Header Row ---
+                    table_html += '<thead><tr>'
+                    cols_to_display = ['Material Name', 'SKU', 'Quantity', 'Average Price', 'Total Value', 'Contract Type', 'Incoterm']
+                    
+                    for i, col in enumerate(cols_to_display):
+                        if col in df_type.columns:
+                            css_class = ""
+                            if col == 'Material Name':
+                                css_class = "mat-name-header"
+                            elif col == 'SKU':
+                                css_class = "sku-header"
+                            table_html += f'<th class="{css_class}">{col}</th>'
+                    table_html += '</tr></thead><tbody>'
+
+                    # --- Data Rows ---
+                    for index, row in df_type.iterrows():
+                        table_html += '<tr class="data-row">'
+                        
+                        for i, col in enumerate(cols_to_display):
+                            if col in df_type.columns:
+                                cell_value = row[col]
+                                cell_class = ""
+                                
+                                if col == 'Material Name':
+                                    cell_class = "mat-name-cell"
+                                elif col == 'SKU':
+                                    cell_class = "sku-cell"
+                                
+                                table_html += f'<td class="{cell_class}">{cell_value}</td>'
+                        
+                        table_html += '</tr>'
+
+                    table_html += '</tbody></table></div>'
+                    st.markdown(table_html, unsafe_allow_html=True)
+                    
+
+            else:
+                st.error("The Excel file does not contain a 'Type' column.")
+
+        except Exception as e:
+            st.error(f"Error reading Excel file: {e}")
+
+    else:
+        st.warning(f"File not found: {file_path}. Please ensure 'master.xlsx' is inside the 'Database' folder.")
+
+    st.markdown('<hr class="custom-divider">', unsafe_allow_html=True)
+
+    st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); text-align: center; color: white;">
+            <div style='font-size: 2.9rem; opacity: 1;'>Total 2026 Materials Budget: 123456 $</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+
 # =====================================================================================================================
 # ============================================ PAGE 3 : ANALYSIS ====================================================
 # =====================================================================================================================
@@ -1999,7 +2978,7 @@ def future_forecasting_page():
         <div class="detail-card" style="padding-left: 2.5rem; border-radius: 10px; background-color: #f8f9fa; margin-bottom: 1rem; border-left: 5px solid #1565C0;">
             <h3 style="color:#1565C0; margin:0;">
                 Total Demand for the Forecasted Period ( 
-                <strong style="color: rgb(255, 75, 75);">{future_steps} Months</strong> ): ( <strong style="color: rgb(255, 75, 75);">{formatted_total}</strong> )
+                <strong style="color: rgb(255, 75, 75);">{future_steps} Months</strong> ): ( <strong style="color: rgb(255, 75, 75);">{formatted_total}</strong> ) Units
             </h3>
         </div>
     """, unsafe_allow_html=True)
@@ -5265,140 +6244,148 @@ def supplier_report_page():
 # =====================================================================================================================
 # ================================================ MAIN ROUTER ======================================================
 # =====================================================================================================================
-# Define the page names
-import streamlit as st
-import pandas as pd
-import numpy as np
 
-# --- 1. DEFINE PAGE GROUPS ---
-COMMON_PAGES = [
-    "Material Selection", "data", "analysis", "analysis2", "analysis3", "analysis4", 
-    "results from analysis", "recommendation", "forecasting", 
-    "future forecasting"
-]
 
-SMOOTH_PAGES = [
-    "eoq_smooth1", "eoq_smooth2", "eoq_smooth3", "eoq_smooth4", "eoq_smooth5", "smooth_final_summary"
-]
+# ========================= MAIN APPLICATION LOGIC =========================
+# Only runs if logged in
+if st.session_state.logged_in:
 
-ERRATIC_PAGES = [
-    "eoq_erratic1", "eoq_erratic2", "eoq_erratic3", "eoq_erratic4", "erratic_final_summary"
-]
+    # --- 1. DEFINE PAGE GROUPS ---
+    COMMON_PAGES = [
+        "Material Selection", "material_excel", "data", "top manager","analysis", "analysis2", "analysis3", "analysis4", 
+        "results from analysis", "recommendation", "forecasting", 
+        "future forecasting"
+    ]
 
-FINAL_PAGES = ["supplier report"]
+    SMOOTH_PAGES = [
+        "eoq_smooth1", "eoq_smooth2", "eoq_smooth3", "eoq_smooth4", "eoq_smooth5", "smooth_final_summary"
+    ]
 
-# --- 2. BUILD DYNAMIC LIST BASED ON CLASSIFICATION ---
-# Get the classification from session state (defaults to None if not analyzed yet)
-demand_type = st.session_state.get('demand_type_classification', None)
+    ERRATIC_PAGES = [
+        "eoq_erratic1", "eoq_erratic2", "eoq_erratic3", "eoq_erratic4", "erratic_final_summary"
+    ]
 
-if demand_type == "Smooth":
-    CURRENT_PAGES = COMMON_PAGES + SMOOTH_PAGES + FINAL_PAGES
-elif demand_type == "Erratic":
-    CURRENT_PAGES = COMMON_PAGES + ERRATIC_PAGES + FINAL_PAGES
-else:
-    # If not yet classified, show only the common workflow
-    CURRENT_PAGES = COMMON_PAGES + FINAL_PAGES
+    FINAL_PAGES = ["supplier report"]
 
-# --- 3. SESSION STATE MANAGEMENT ---
-if 'page' not in st.session_state:
-    st.session_state.page = "material"
+    # --- 2. BUILD DYNAMIC LIST BASED ON CLASSIFICATION ---
+    # Get the classification from session state (defaults to None if not analyzed yet)
+    demand_type = st.session_state.get('demand_type_classification', None)
 
-# Sync current page if it's no longer in the dynamic list (e.g., user changed data)
-if st.session_state.page not in CURRENT_PAGES:
-    st.session_state.page = "material"
-
-# --- 4. SIDEBAR NAVIGATION ---
-st.sidebar.title("Navigation")
-
-def get_page_index():
-    try:
-        return CURRENT_PAGES.index(st.session_state.page)
-    except ValueError:
-        return 0
-
-selection = st.sidebar.radio(
-    "Go to", 
-    CURRENT_PAGES, 
-    index=get_page_index()
-)
-
-# --- 5. AUTOMATIC PRICE FORECAST TRIGGER ---
-# Trigger calculation when moving from 'price forecasting' into the EOQ sections
-if selection in (SMOOTH_PAGES + ERRATIC_PAGES) and 'forecasted_price' not in st.session_state:
-    if 'df_uploaded' in st.session_state:
-        df = st.session_state['df_uploaded'].copy()
-        df.columns = df.columns.str.strip().str.lower()
-        
-        # Check for your specific spelling "price received"
-        if 'price received' in df.columns and 'date' in df.columns:
-            with st.spinner("Calculating future price for EOQ..."):
-                try:
-                    # Calling your updated weighted average function
-                    f_price, _, _ = forecast_price(df)
-                    st.session_state.forecasted_price = f_price
-                except Exception as e:
-                    st.error(f"Auto-forecast failed: {e}")
+    if demand_type == "Smooth":
+        CURRENT_PAGES = COMMON_PAGES + SMOOTH_PAGES + FINAL_PAGES
+    elif demand_type == "Erratic":
+        CURRENT_PAGES = COMMON_PAGES + ERRATIC_PAGES + FINAL_PAGES
     else:
-        st.warning("Please upload data to enable EOQ calculations.")
+        # If not yet classified, show only the common workflow
+        CURRENT_PAGES = COMMON_PAGES + FINAL_PAGES
 
-# Handle Page Routing
-if selection != st.session_state.page:
-    st.session_state.page = selection
-    st.rerun()
+    # --- 3. SESSION STATE MANAGEMENT ---
+    # Ensure page is in the current list, otherwise reset to 'material'
+    if st.session_state.page not in CURRENT_PAGES:
+        st.session_state.page = "material"
 
-# --- 6. PAGE ROUTING LOGIC ---
-if st.session_state.page == "Material Selection":
-    page_material() 
-elif st.session_state.page == "data":
-    page_data()
-elif st.session_state.page == "analysis":
-    analysis_page()
-elif st.session_state.page == "analysis2":
-    analysis2_page()
-elif st.session_state.page == "analysis3":
-    analysis3_page()
-elif st.session_state.page == "analysis4":
-    analysis4_page()
-elif st.session_state.page == "results from analysis":
-    results_from_analysis_page() 
-elif st.session_state.page == "recommendation":
-    recommendation_page()
-elif st.session_state.page == "forecasting":
-    forecasting_page()
-elif st.session_state.page == "future forecasting":
-    future_forecasting_page()
-elif st.session_state.page == "price forecasting":
-    price_forecasting_page()
+    # --- 4. SIDEBAR NAVIGATION ---
+    st.sidebar.title(f"Navigation ({st.session_state.role})")
 
-# Smooth Flow
-elif st.session_state.page == "eoq_smooth1":
-    eoq_smooth1_page()
-elif st.session_state.page == "eoq_smooth2":
-    eoq_smooth2_page()
-elif st.session_state.page == "eoq_smooth3":
-    eoq_smooth3_page()
-elif st.session_state.page == "eoq_smooth4":
-    eoq_smooth4_page()
-elif st.session_state.page == "eoq_smooth5":
-    eoq_smooth5_page()
-elif st.session_state.page == "smooth_final_summary":
-    smooth_final_summary_page()
+    # Logout button in sidebar
+    if st.sidebar.button("Logout"):
+        for key in st.session_state.keys():
+            del st.session_state[key]
+        st.rerun()
 
-# Erratic Flow
-elif st.session_state.page == "eoq_erratic1":
-    eoq_erratic1_page()
-elif st.session_state.page == "eoq_erratic2":
-    eoq_erratic2_page()
-elif st.session_state.page == "eoq_erratic3":
-    eoq_erratic3_page()
-elif st.session_state.page == "eoq_erratic4":
-    eoq_erratic4_page()
-elif st.session_state.page == "erratic_final_summary":
-    erratic_final_summary_page()
+    def get_page_index():
+        try:
+            return CURRENT_PAGES.index(st.session_state.page)
+        except ValueError:
+            return 0
 
-elif st.session_state.page == "supplier report":
-    supplier_report_page()
+    selection = st.sidebar.radio(
+        "Go to", 
+        CURRENT_PAGES, 
+        index=get_page_index()
+    )
 
+    # --- 5. AUTOMATIC PRICE FORECAST TRIGGER ---
+    # Trigger calculation when moving into EOQ sections
+    if selection in (SMOOTH_PAGES + ERRATIC_PAGES) and 'forecasted_price' not in st.session_state:
+        if 'df_uploaded' in st.session_state:
+            df = st.session_state['df_uploaded'].copy()
+            df.columns = df.columns.str.strip().str.lower()
+            
+            # Check for your specific spelling "price received"
+            if 'price received' in df.columns and 'date' in df.columns:
+                with st.spinner("Calculating future price for EOQ..."):
+                    try:
+                        # Ensure forecast_price is defined in your imports
+                        # f_price, _, _ = forecast_price(df) 
+                        # st.session_state.forecasted_price = f_price
+                        pass # Placeholder logic since imports are commented out
+                    except Exception as e:
+                        st.error(f"Auto-forecast failed: {e}")
+        else:
+            st.warning("Please upload data to enable EOQ calculations.")
 
+    # Handle Page Routing
+    if selection != st.session_state.page:
+        st.session_state.page = selection
+        st.rerun()
 
+    # --- 6. PAGE ROUTING LOGIC ---
+    # Note: You must ensure these functions (e.g., page_material) are defined 
+    # elsewhere in your script or below this block.
+    
+    if st.session_state.page == "Material Selection":
+        page_material() 
+    elif st.session_state.page == "material_excel":
+        page_material_excel()
+    elif st.session_state.page == "top manager":
+        top_page()
+    elif st.session_state.page == "data":
+        page_data()
+    elif st.session_state.page == "analysis":
+        analysis_page()
+    elif st.session_state.page == "analysis2":
+        analysis2_page()
+    elif st.session_state.page == "analysis3":
+        analysis3_page()
+    elif st.session_state.page == "analysis4":
+        analysis4_page()
+    elif st.session_state.page == "results from analysis":
+        results_from_analysis_page() 
+    elif st.session_state.page == "recommendation":
+        recommendation_page()
+    elif st.session_state.page == "forecasting":
+        forecasting_page()
+    elif st.session_state.page == "future forecasting":
+        future_forecasting_page()
+    elif st.session_state.page == "price forecasting":
+        price_forecasting_page()
 
+    # Smooth Flow
+    elif st.session_state.page == "eoq_smooth1":
+        eoq_smooth1_page()
+    elif st.session_state.page == "eoq_smooth2":
+        eoq_smooth2_page()
+    elif st.session_state.page == "eoq_smooth3":
+        eoq_smooth3_page()
+    elif st.session_state.page == "eoq_smooth4":
+        eoq_smooth4_page()
+    elif st.session_state.page == "eoq_smooth5":
+        eoq_smooth5_page()
+    elif st.session_state.page == "smooth_final_summary":
+        smooth_final_summary_page()
+
+    # Erratic Flow
+    elif st.session_state.page == "eoq_erratic1":
+        eoq_erratic1_page()
+    elif st.session_state.page == "eoq_erratic2":
+        eoq_erratic2_page()
+    elif st.session_state.page == "eoq_erratic3":
+        eoq_erratic3_page()
+    elif st.session_state.page == "eoq_erratic4":
+        eoq_erratic4_page()
+    elif st.session_state.page == "erratic_final_summary":
+        erratic_final_summary_page()
+
+    elif st.session_state.page == "supplier report":
+        supplier_report_page()
