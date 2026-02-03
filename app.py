@@ -663,6 +663,8 @@ def page_data():
         .custom-table-container {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin-bottom: 30px;
+            max-height: 400px;          /* ≈ 10 rows */
+            overflow-y: auto;           /* vertical scroll */
             overflow-x: auto;
         }
 
@@ -6454,6 +6456,7 @@ if st.session_state.logged_in:
 
     elif st.session_state.page == "supplier report":
         supplier_report_page()
+
 
 
 
