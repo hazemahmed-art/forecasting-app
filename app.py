@@ -666,6 +666,7 @@ def page_data():
             max-height: 400px;          /* ≈ 10 rows */
             overflow-y: auto;           /* vertical scroll */
             overflow-x: auto;
+            border: 2px solid #1E88E5;
         }
 
         /* The Table */
@@ -6456,6 +6457,7 @@ if st.session_state.logged_in:
 
     elif st.session_state.page == "supplier report":
         supplier_report_page()
+
 
 
 
