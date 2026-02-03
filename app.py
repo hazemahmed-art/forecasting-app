@@ -258,7 +258,7 @@ if st.session_state.page == "landing":
     """, unsafe_allow_html=True)
     
     # Display Welcome Message
-    st.markdown('<div class="big-title">Welcome To The System</div>', unsafe_allow_html=True)
+    st.markdown('<div class="big-title">Welcome To Inventory Management System</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">Please enter your role to continue</div>', unsafe_allow_html=True)
     
     # Create 3 columns for the buttons (Center aligned)
@@ -803,7 +803,7 @@ def page_data():
             table_html += '</tr></thead><tbody>'
 
             # Rows
-            for _, row in df_copy.iterrows():
+            for _, row in df_copy.head(10).iterrows():
                 table_html += '<tr class="data-row">'
                 for col in df_copy.columns:
                     val = row[col]
@@ -6454,5 +6454,6 @@ if st.session_state.logged_in:
 
     elif st.session_state.page == "supplier report":
         supplier_report_page()
+
 
 
