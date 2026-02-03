@@ -848,7 +848,7 @@ def page_material_excel():
         return
 
     item_code = st.session_state.selected_material_row["Item Code"]
-    db_path = "Database/ai demand history.xlsx"
+    db_path = "Database/aaai demand history.xlsx"
 
     if not os.path.exists(db_path):
         st.error("Demand history database not found.")
@@ -6389,3 +6389,4 @@ if st.session_state.logged_in:
 
     elif st.session_state.page == "supplier report":
         supplier_report_page()
+
