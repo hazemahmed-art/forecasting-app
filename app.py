@@ -680,7 +680,7 @@ def page_data():
         .modern-table th {
             background-color: #1E88E5; /* Blue Header */
             color: white;
-            padding: 12px 15px;
+            padding: 10px;
             text-align: left;
             font-weight: 600;
             text-transform: uppercase;
@@ -701,7 +701,7 @@ def page_data():
 
         /* Table Cells (Default) */
         .modern-table td {
-            padding: 10px 15px;
+            padding: 10px;
             font-size: 0.8em;
             color: #333;
             border: 1px solid #e0e0e0; /* Light grey borders for info */
@@ -6454,6 +6454,7 @@ if st.session_state.logged_in:
 
     elif st.session_state.page == "supplier report":
         supplier_report_page()
+
 
 
 
