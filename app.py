@@ -684,7 +684,7 @@ def page_data():
             text-align: left;
             font-weight: 600;
             text-transform: uppercase;
-            font-size: 1.2em;
+            font-size: 1em;
             letter-spacing: 0.5px;
         }
 
@@ -702,7 +702,7 @@ def page_data():
         /* Table Cells (Default) */
         .modern-table td {
             padding: 10px 15px;
-            font-size: 20px;
+            font-size: 0.8em;
             color: #333;
             border: 1px solid #e0e0e0; /* Light grey borders for info */
             border-top: none;
@@ -6454,6 +6454,7 @@ if st.session_state.logged_in:
 
     elif st.session_state.page == "supplier report":
         supplier_report_page()
+
 
 
 
