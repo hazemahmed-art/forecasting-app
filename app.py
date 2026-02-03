@@ -805,7 +805,7 @@ def page_data():
             table_html += '</tr></thead><tbody>'
 
             # Rows
-            for _, row in df_copy.head(10).iterrows():
+            for _, row in df_copy.iterrows():
                 table_html += '<tr class="data-row">'
                 for col in df_copy.columns:
                     val = row[col]
@@ -6456,6 +6456,7 @@ if st.session_state.logged_in:
 
     elif st.session_state.page == "supplier report":
         supplier_report_page()
+
 
 
 
