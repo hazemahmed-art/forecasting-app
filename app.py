@@ -232,54 +232,58 @@ if st.session_state.page == "landing":
     st.markdown("""
         <style>
         div.stButton > button:first-child {
-            width: 60em !important;
+            width: 50em !important;
             white-space: normal;
-            background-color: #0099ff;
-            color: white;
+            background-color: white;
+            color: #0099ff;
             font-size: 15px !important;
             margin-bottom:20px;
-            height: 5em;
+            margin-top:20px;
+            height: 7em;
             border-radius: 10px;
-            border: none;
-            box-shadow: 0px 4px 6px rgba(0,0,0,0.2);
+            box-shadow: 0px 4px 6px #0099ff;
             transition: all 0.3s ease;
             display: block;
+            font-weight: bold;
+            border-color: #0099ff;
         }
         div.stButton > button:hover {
             background-color: #007acc;
             transform: translateY(-2px);
             box-shadow: 0px 6px 8px rgba(0,0,0,0.3);
+            color: white;
         }
         /* Specifically target the button text */
         div.stButton > button:first-child p {
             font-size: 25px !important;
+            font-weight: bold;
         }
         </style>
     """, unsafe_allow_html=True)
     
     # Display Welcome Message
-    st.markdown('<div class="big-title">Welcome To Inventory Management System</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Please enter your role to continue</div>', unsafe_allow_html=True)
+    st.markdown('<div class="big-title">Welcome to Forecasting & Inventory System</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Please specify your user role to access the dashboard</div>', unsafe_allow_html=True)
     
     # Create 3 columns for the buttons (Center aligned)
-    col1, col2, col3 = st.columns([1,3,1])
+    col1, col2, col3 = st.columns([1,2,1])
     with col2:
         # Button shows "Top Management" but sets role to "admin" (matches database)
-        if st.button("Top Management", use_container_width=False):
+        if st.button("Executive Management", use_container_width=False):
             st.session_state.role = "admin"
             st.success("Welcome, Top Management!")
             st.session_state.page = "login"
             st.rerun()
             
         # Button shows "Middle" and sets role to "middle" (matches database)
-        if st.button("Middle Level", use_container_width=False):
+        if st.button("Planning & Supply Chain Management", use_container_width=False):
             st.session_state.role = "middle"
             st.success("Welcome, Middle Management!")
             st.session_state.page = "login"
             st.rerun()
             
         # Button shows "Specialist" but sets role to "user" (matches database)
-        if st.button("Specialist", use_container_width=False):
+        if st.button("Analytical & Planning Specialist", use_container_width=False):
             st.session_state.role = "user"
             st.success("Welcome, Specialist!")
             st.session_state.page = "login"
@@ -334,6 +338,7 @@ if st.session_state.page == "login":
         box-shadow: 0 0 0 4px rgba(30, 136, 229, 0.15);
         background: #ffffff;
         outline: none;
+        
     }
     
     /* Login button */
@@ -350,6 +355,7 @@ if st.session_state.page == "login":
         box-shadow: 0 6px 20px rgba(30, 136, 229, 0.4);
         letter-spacing: 0.5px;
         text-transform: uppercase;
+
     }
     
     div[data-testid="stForm"] button[kind="primary"]:hover {
@@ -458,7 +464,7 @@ def page_material():
     st.markdown('<div class="subtitle">Select a Target Material</div>', unsafe_allow_html=True)
     
     # ========================= Load Data =========================
-    file_path = "Database/Material Information.xlsx"
+    file_path = "Database/Material Information final.xlsx"
 
     if not os.path.exists(file_path):
         st.error(f"File not found: {file_path}")
@@ -472,7 +478,7 @@ def page_material():
 
     filter_columns = ['Item Family', 'Item Type', 'Grade', 'Item Code']
     detail_columns = ['Packaging', 'Physical Properties', 'Storage Conditions',
-                    'Warehouse Location', 'Shelf Life', 'Supplier', 'Purchasing Unit', 'Service Level']
+                    'Warehouse Location', 'Shelf Life', 'Last Supplier', 'Purchasing Unit', 'Service Level']
 
     missing_cols = [col for col in filter_columns + detail_columns if col not in df.columns]
     if missing_cols:
@@ -561,20 +567,28 @@ def page_material():
                 '<p style="color: #28a745; font-size: 1.1rem; margin: 0; padding: 0.5rem 0;">Material selected successfully</p>',
                 unsafe_allow_html=True
         )
+    st.markdown('<div class="next-btn-container">', unsafe_allow_html=True)
 
     if selected_code != CODE_PLACEHOLDER:
         row = filtered_df[filtered_df['Item Code'] == selected_code].iloc[0]
         col1, col2, col_spacer = st.columns([1.5, 5, 2])
         with col1:
-            st.subheader("Material Details:")
+            st.markdown(f"""
+                <div style="
+                    padding: 0.5rem; border-radius: 10px; margin-bottom: 5px; margin-top:-30px;  font-size: 1.6rem; font-weight: bold; 
+                ">
+                    Material Details:
+                </div>
+                """, unsafe_allow_html=True)
         with col2:
           st.markdown(f"""
             <div style="
-                padding: 0.5rem; border-radius: 10px; margin-bottom: 5px; border-left: 5px solid #1E88E5; background-color: rgb(240 242 253 / 31%); font-size: 1.6rem; font-weight: bold; color: #1E88E5;
+                padding: 0.5rem; border-radius: 10px; margin-bottom: 5px; margin-top:-30px; border-left: 5px solid #1E88E5; background-color: rgb(240 242 253 / 31%); font-size: 1.6rem; font-weight: bold; color: #1E88E5;
             ">
                 {row['Item Code']} - {row['Item Family']} ({row['Item Type']} - Grade {row['Grade']})
             </div>
             """, unsafe_allow_html=True)
+          
         st.markdown('<hr class="custom-divider">', unsafe_allow_html=True)
 
         st.markdown('<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">', unsafe_allow_html=True)
@@ -585,13 +599,12 @@ def page_material():
                 value = row[col_name] if pd.notna(row[col_name]) else "Not available"
                 with cols[j]:
                     st.markdown(f"""
-                    <div style="border: 1px solid #1E88E5; padding: 0.5rem; border-radius: 5px; margin-bottom: 19px;">
+                    <div style="border: 1px solid #1E88E5; padding: 0.5rem; border-radius: 5px; margin-bottom: 19px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
                         <span class="detail-label" style="font-weight:bold;">{col_name}:</span><br>
                         <span style="font-size: 1.4rem; color: #555;">{value}</span>
                     </div>
                     """, unsafe_allow_html=True)
     
-    st.markdown('<div class="next-btn-container">', unsafe_allow_html=True)
 
 
     user_role = st.session_state.get("role", "admin")
@@ -605,7 +618,7 @@ def page_material():
 
 
     with col_right:
-        if st.button("Next → Data Uploading", type="primary", use_container_width=True):
+        if st.button("Next → ", type="primary", use_container_width=True):
             if selected_code == CODE_PLACEHOLDER:
                 st.warning("Please select an Item Code to proceed.")
             else:
@@ -765,14 +778,14 @@ def page_data():
         # Check if we have a selected material
         if 'selected_material_row' in st.session_state:
             item_code = st.session_state.selected_material_row['Item Code']
-            db_path = "Database/aaai demand history.xlsx"
+            db_path = "Database/ai demand history final.xlsx"
 
             if os.path.exists(db_path):
                 try:
                     # Read the sheet corresponding to the item code
                     df_display = pd.read_excel(db_path, sheet_name=item_code)
                 except ValueError:
-                    st.error(f"Sheet '{item_code}' not found in 'aaai demand history.xlsx'")
+                    st.error(f"Sheet '{item_code}' not found in 'ai demand history final.xlsx'")
                 except Exception as e:
                     st.error(f"Error reading database file: {e}")
             else:
@@ -839,13 +852,13 @@ def page_data():
             for i, col_name in enumerate(summary_columns):
                 st.markdown(f"""
                 <div style="
-                    padding: 0.9rem;
+                    padding: 1.2rem;
                     border-radius: 10px;
-                    margin-bottom: 10px;
+                    margin-bottom: 25px;
                     border-left: 5px solid #1565C0;
                     background-color: #f8f9fa;
                 ">
-                    <span style="font-weight:bold; color:#1565C0; font-size:1.5rem; ">{col_name}: </span>
+                    <span style="font-weight:bold; color:#1565C0; font-size:1.6rem; ">{col_name}: </span>
                     <span style="font-weight:bold;font-size:1.5rem; color:#555;">{summary_values[i]}</span>
                 </div>
                 """, unsafe_allow_html=True)
@@ -902,20 +915,290 @@ def page_data():
 
     st.markdown('</div>', unsafe_allow_html=True)
 
+
+
 # =====================================================================================================================
 # ============================================ middle first page  ================================================
 # =====================================================================================================================
 
 def page_material_excel():
-    st.markdown('<div class="big-title">Material Cost History</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Average Unit Price by Supplier and Year</div>', unsafe_allow_html=True)
+    st.markdown('<div class="big-title">Material Purchase Analysis</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Annual Quantity and Receipt Value Overview</div>', unsafe_allow_html=True)
 
     if "selected_material_row" not in st.session_state:
         st.warning("No material selected. Please go back.")
         return
 
     item_code = st.session_state.selected_material_row["Item Code"]
-    db_path = "Database/aaai demand history.xlsx"
+    db_path = "Database/ai demand history final.xlsx"
+
+    if not os.path.exists(db_path):
+        st.error("Demand history database not found.")
+        return
+
+    try:
+        df = pd.read_excel(db_path, sheet_name=item_code)
+    except ValueError:
+        st.error(f"No sheet found for Item Code: {item_code}")
+        return
+
+    # ================= VALIDATION =================
+    required_cols = ["date", "supplier", "quantity received", "price received"]
+    missing_cols = [c for c in required_cols if c not in df.columns]
+
+    if missing_cols:
+        st.error(f"Missing columns in Excel file: {missing_cols}")
+        return
+
+    # ================= DATA PREPARATION =================
+    df["date"] = pd.to_datetime(df["date"])
+    df["Year"] = df["date"].dt.year
+
+    df["Total Price"] = df["quantity received"] * df["price received"]
+
+    # ================= AGGREGATION =================
+    agg_df = (
+        df
+        .groupby(["Year", "supplier"], as_index=False)
+        .agg(
+            total_price=("Total Price", "sum"),
+            total_quantity=("quantity received", "sum"),
+            avg_service_level=("service level", "mean")
+        )
+    )
+
+    agg_df["Avg Unit Price"] = agg_df["total_price"] / agg_df["total_quantity"]
+
+    st.markdown(f"""
+    <div style="
+        padding: 0.5rem 1.5rem; border-radius: 10px; margin-bottom: 5px; padding-left:10px: margin-top:-30px; border-left: 5px solid #1E88E5; background-color: rgb(240 242 253 / 31%); font-size: 1.6rem; font-weight: bold; color: #1E88E5;
+    ">
+    Item Code: {item_code}
+    </div>
+    """, unsafe_allow_html=True)
+
+
+    # ================= DISPLAY RAW DATA =================
+    #st.dataframe(df, use_container_width=True)
+
+
+    
+    col1,col2 = st.columns(2)
+    with col1:
+        
+        # ================= TOTAL QUANTITY RECEIVED PER YEAR =================
+        st.subheader("Total Quantity Received per Year")
+
+        yearly_total = (
+            df
+            .groupby("Year", as_index=False)
+            .agg(total_quantity=("quantity received", "sum"))
+            .sort_values("Year")
+        )
+
+        if yearly_total.empty:
+            st.info("No quantity data available.")
+        else:
+            import matplotlib.pyplot as plt
+            from matplotlib.ticker import FuncFormatter
+
+            # ================= THIS YEAR VALUES PER ITEM =================
+            this_year_values = {
+                "CBL-XLPE-A-001": 16180,
+                "CBL-PE-B-003": 22170,
+                "CBL-PVC-A-005": 72400,
+                "CBL-LSF-C-007": 19600,
+                "SHD-GSW-A-008": 161090,
+                "SHD-GST-B-009": 29154,
+                "SHD-CU-A-010": 25010,
+                "SHD-AI-C-011": 16140,
+                "BLD-MT-A-009": 198542,
+                "BLD-MT-B-009": 155498,
+                "BLD-WBT-A-009": 84271,
+                "BLD-WBT-C-009": 75169            }
+
+            # Use the 'item_code' variable from session state
+            this_year_value = this_year_values.get(item_code, 0)
+
+            # ================= REAL HISTORICAL YEARS =================
+            real_years = yearly_total["Year"].astype(int).tolist()
+            real_quantities = yearly_total["total_quantity"].tolist()
+
+            # Add "This Year"
+            all_labels = [str(y) for y in real_years] + ["This Year"]
+            all_values = real_quantities + [this_year_value]
+
+            # Positions
+            x_positions = list(range(len(real_years))) + [len(real_years) + 0.7]
+
+            fig, ax = plt.subplots(figsize=(10, 5.5))
+
+            bars = ax.bar(
+                x_positions,
+                all_values,
+                color=["#4CAF50"] * len(real_years) + ["#FF7043"],
+                width=0.68,
+                edgecolor="black",
+                linewidth=0.8
+            )
+
+            # Value labels
+            for bar in bars:
+                h = bar.get_height()
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    h,
+                    f"{int(h):,}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=10,
+                    fontweight="bold"
+                )
+
+            ax.set_xticks(x_positions)
+            ax.set_xticklabels(all_labels)
+            ax.set_xlabel("Year")
+            ax.set_ylabel("Total Quantity Received")
+            ax.grid(axis="y", linestyle="--", alpha=0.4)
+            ax.set_axisbelow(True)
+            ax.yaxis.set_major_formatter(FuncFormatter(lambda x, _: format(int(x), ",")))
+
+            plt.tight_layout()
+            st.pyplot(fig)
+
+                
+    with col2:
+    #-----------------------------------------------------
+    # ================= AVERAGE (QUANTITY × PRICE) PER YEAR =================
+        st.subheader("Average Receipt Value per Year")
+
+        yearly_avg_value = (
+            df
+            .groupby("Year", as_index=False)
+            .agg(
+                avg_receipt_value=("Total Price", "mean"),
+                count_records=("Total Price", "count")
+            )
+            .sort_values("Year")
+        )
+
+        if yearly_avg_value.empty:
+            st.info("No price/quantity data available for this calculation.")
+        else:
+            import matplotlib.pyplot as plt
+            from matplotlib.ticker import FuncFormatter
+
+            # --- [EDIT START] TARGET VALUES FOR SECOND CHART ---
+            target_avg_values = {
+                "CBL-XLPE-A-001": 35007,
+                "CBL-PE-B-003": 3200514,
+                "CBL-PVC-A-005": 530491,
+                "CBL-LSF-C-007": 220100,
+                "SHD-GSW-A-008": 3204020,
+                "SHD-GST-B-009": 1050240,
+                "SHD-CU-A-010": 220400,
+                "SHD-AI-C-011": 320070,
+                "BLD-MT-A-009": 2431487,
+                "BLD-MT-B-009": 4071237,
+                "BLD-WBT-A-009": 630213,
+                "BLD-WBT-C-009": 201493
+            }
+            
+            # Get the target value for the current item
+            this_year_avg_value = target_avg_values.get(item_code, 0)
+            # --- [EDIT END] ---
+
+            # Real historical years
+            real_years = yearly_avg_value["Year"].astype(int).tolist()
+            real_avg_values = yearly_avg_value["avg_receipt_value"].tolist()
+            real_counts = yearly_avg_value["count_records"].tolist()
+
+            # Add "This Year" bar (Using the dynamic value)
+            all_labels = [str(y) for y in real_years] + ["This Year"]
+            all_values = real_avg_values + [this_year_avg_value]
+            
+            # Positions: consecutive for history, small gap before "This Year"
+            x_positions = list(range(len(real_years))) + [len(real_years) + 0.7]
+
+            fig_avg, ax_avg = plt.subplots(figsize=(10, 5.5))
+
+            bars = ax_avg.bar(
+                x_positions,
+                all_values,
+                color=["#FF9800"] * len(real_years) + ["#E91E63"],   # orange historical → pink/magenta for This Year
+                width=0.68,
+                edgecolor="black",
+                linewidth=0.9
+            )
+
+            # Value labels on top of each bar
+            for i, bar in enumerate(bars):
+                height = bar.get_height()
+                count_text = f"n={real_counts[i]}" if i < len(real_counts) else ""
+                
+                # Main value
+                ax_avg.text(
+                    bar.get_x() + bar.get_width()/2,
+                    height,
+                    f"{height:,.0f}" if height >= 100 else f"{height:,.1f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=10,
+                    fontweight="bold",
+                    color="#111"
+                )
+                
+                # Small record count note (only for real years)
+                if count_text:
+                    ax_avg.text(
+                        bar.get_x() + bar.get_width()/2,
+                        height * 0.92 if height > 0 else 0,
+                        count_text,
+                        ha="center",
+                        va="top",
+                        fontsize=9,
+                        color="#555"
+                    )
+
+            ax_avg.set_xticks(x_positions)
+            ax_avg.set_xticklabels(all_labels)
+
+            ax_avg.set_xlabel("Year", fontsize=12)
+            ax_avg.set_ylabel("Average Receipt Value\n(Qty × Unit Price)", fontsize=12)
+            ax_avg.set_title("", fontsize=14, pad=15)
+
+            ax_avg.grid(axis="y", linestyle="--", alpha=0.35)
+            ax_avg.set_axisbelow(True)
+
+            # Thousands separator
+            ax_avg.yaxis.set_major_formatter(FuncFormatter(lambda x, p: format(int(x), ",")))
+
+            plt.tight_layout()
+            st.pyplot(fig_avg)
+    # ================= NAVIGATION =================
+    col_back,col3, col_next = st.columns([1,3, 1])
+
+    with col_back:
+        if st.button("← Back to material selection"  ,use_container_width=True):
+            st.session_state.page = "Material Selection"
+            st.rerun()
+
+    with col_next:
+        if st.button("Next → Supplier Performance", type="primary" ,use_container_width=True):
+            st.session_state.page = "material_excel1"
+            st.rerun()
+
+
+def page_material_excel1():
+    st.markdown('<div class="big-title">Supplier Performance Dashboard</div>', unsafe_allow_html=True)
+    #st.markdown('<div class="subtitle">Average Unit Price by Supplier and Year</div>', unsafe_allow_html=True)
+
+    if "selected_material_row" not in st.session_state:
+        st.warning("No material selected. Please go back.")
+        return
+
+    item_code = st.session_state.selected_material_row["Item Code"]
+    db_path = "Database/ai demand history final.xlsx"
 
     if not os.path.exists(db_path):
         st.error("Demand history database not found.")
@@ -956,152 +1239,18 @@ def page_material_excel():
 
 
     # ================= DISPLAY RAW DATA =================
-    st.subheader(f"Item Code: {item_code}")
-    st.dataframe(df, use_container_width=True)
+    #st.dataframe(df, use_container_width=True)
 
-    # ================= GROUPED BAR CHART =================
-    st.subheader("Average Unit Price per Supplier (Grouped by Year)")
+    # Define supplier colors at the top
+    supplier_colors = [
+        "#1f77b4", "#bcbd22", "#2ca02c", "#d62728", "#17becf",
+        "#ff9896", "#ff7f0e", "#9467bd", "#e377c2", "#c5b0d5",
+    ]
 
-    import matplotlib.pyplot as plt
-    import numpy as np
-
-    years = sorted(agg_df["Year"].unique())
-    suppliers = sorted(agg_df["supplier"].unique())
-
-    bar_width = 0.8 / len(suppliers)
-    x = np.arange(len(years))
-
-    fig, ax = plt.subplots(figsize=(12, 5))
-
-    for i, supplier in enumerate(suppliers):
-        supplier_data = agg_df[agg_df["supplier"] == supplier]
-
-        values = [
-            supplier_data[supplier_data["Year"] == year]["Avg Unit Price"].values[0]
-            if year in supplier_data["Year"].values else 0
-            for year in years
-        ]
-
-        ax.bar(
-            x + i * bar_width,
-            values,
-            width=bar_width,
-            label=supplier
-        )
-
-    ax.set_xlabel("Year")
-    ax.set_ylabel("Average Unit Price")
-    ax.set_title("Supplier Price Comparison by Year")
-
-    ax.set_xticks(x + bar_width * (len(suppliers) - 1) / 2)
-    ax.set_xticklabels(years)
-
-    ax.legend(title="supplier", bbox_to_anchor=(1.02, 1), loc="upper left")
-
-    st.pyplot(fig)
-
-#-----------------------------------
-    st.subheader("Total Quantity Received per Supplier (Grouped by Year)")
-
-    import matplotlib.pyplot as plt
-    import numpy as np
-
-    years = sorted(agg_df["Year"].unique())
-    suppliers = sorted(agg_df["supplier"].unique())
-
-    bar_width = 0.8 / len(suppliers)
-    x = np.arange(len(years))
-
-    fig_qty, ax_qty = plt.subplots(figsize=(12, 5))
-
-    for i, supplier in enumerate(suppliers):
-        supplier_data = agg_df[agg_df["supplier"] == supplier]
-
-        values = [
-            supplier_data[supplier_data["Year"] == year]["total_quantity"].values[0]
-            if year in supplier_data["Year"].values else 0
-            for year in years
-        ]
-
-        ax_qty.bar(
-            x + i * bar_width,
-            values,
-            width=bar_width,
-            label=supplier
-        )
-
-    ax_qty.set_xlabel("Year")
-    ax_qty.set_ylabel("Total Quantity Received")
-    ax_qty.set_title("Supplier Quantity Comparison by Year")
-
-    ax_qty.set_xticks(x + bar_width * (len(suppliers) - 1) / 2)
-    ax_qty.set_xticklabels(years)
-
-    ax_qty.legend(title="supplier", bbox_to_anchor=(1.02, 1), loc="upper left")
-
-    st.pyplot(fig_qty)
-
-
-#------------------------
-    # ================= GROUPED BAR CHART (SERVICE LEVEL) =================
-    st.subheader("Average Service Level per Supplier (Grouped by Year)")
-
-    import matplotlib.pyplot as plt
-    import numpy as np
-
-    years = sorted(agg_df["Year"].unique())
-    suppliers = sorted(agg_df["supplier"].unique())
-
-    bar_width = 0.8 / len(suppliers)
-    x = np.arange(len(years))
-
-    fig_sl, ax_sl = plt.subplots(figsize=(12, 5))
-
-    for i, supplier in enumerate(suppliers):
-        supplier_data = agg_df[agg_df["supplier"] == supplier]
-
-        values = [
-            supplier_data[supplier_data["Year"] == year]["avg_service_level"].values[0]
-            if year in supplier_data["Year"].values else 0
-            for year in years
-        ]
-
-        ax_sl.bar(
-            x + i * bar_width,
-            values,
-            width=bar_width,
-            label=supplier
-        )
-
-    ax_sl.set_xlabel("Year")
-    ax_sl.set_ylabel("Average Service Level")
-    ax_sl.set_title("Supplier Service Level Comparison by Year")
-
-    ax_sl.set_xticks(x + bar_width * (len(suppliers) - 1) / 2)
-    ax_sl.set_xticklabels(years)
-
-    ax_sl.legend(title="Supplier", bbox_to_anchor=(1.02, 1), loc="upper left")
-
-    st.pyplot(fig_sl)
-
-#----------------------------------------
-    # ================= GROUPED BAR CHART – AVERAGE LEAD TIME =================
-    st.subheader("Average Lead Time per Supplier (Grouped by Year)")
-
-    # Check if the column exists
-    lead_time_col = None
-    possible_names = ["lead time", "Lead Time", "lead_time", "LeadTime", "delivery days", "leadtime"]
-
-    for col in df.columns:
-        if col.lower().replace(" ", "") in [n.lower().replace(" ", "") for n in possible_names]:
-            lead_time_col = col
-            break
-
-    if not lead_time_col:
-        st.warning("Column 'lead time' (or similar) not found in the data → skipping lead time chart.")
-    else:
-        # Add average lead time to aggregation
-        agg_df["avg_lead_time"] = df.groupby(["Year", "supplier"])[lead_time_col].mean().values
+    col1, col2 = st.columns(2)
+    with col1:
+        #-----------------------------------
+        st.subheader("Total Quantity Received per Supplier (Grouped by Year)")
 
         import matplotlib.pyplot as plt
         import numpy as np
@@ -1112,229 +1261,200 @@ def page_material_excel():
         bar_width = 0.8 / len(suppliers)
         x = np.arange(len(years))
 
-        fig_lt, ax_lt = plt.subplots(figsize=(12, 5))
+        fig_qty, ax_qty = plt.subplots(figsize=(12, 290/72))  # Changed to 200px
 
         for i, supplier in enumerate(suppliers):
             supplier_data = agg_df[agg_df["supplier"] == supplier]
 
-            values = []
-            for year in years:
-                match = supplier_data[supplier_data["Year"] == year]
-                if not match.empty:
-                    values.append(match["avg_lead_time"].iloc[0])
-                else:
-                    values.append(0)   # or np.nan if you prefer gaps
+            values = [
+                supplier_data[supplier_data["Year"] == year]["total_quantity"].values[0]
+                if year in supplier_data["Year"].values else 0
+                for year in years
+            ]
 
-            ax_lt.bar(
+            ax_qty.bar(
                 x + i * bar_width,
                 values,
                 width=bar_width,
-                label=supplier
+                label=supplier,
+                color=supplier_colors[i % len(supplier_colors)]
             )
 
-        ax_lt.set_xlabel("Year")
-        ax_lt.set_ylabel("Average Lead Time (days)")
-        ax_lt.set_title("Supplier Lead Time Comparison by Year")
+        ax_qty.set_xlabel("Year")
+        ax_qty.set_ylabel("Total Quantity Received")
+        #ax_qty.set_title("Supplier Quantity Comparison by Year")
 
-        ax_lt.set_xticks(x + bar_width * (len(suppliers) - 1) / 2)
-        ax_lt.set_xticklabels(years)
+        ax_qty.set_xticks(x + bar_width * (len(suppliers) - 1) / 2)
+        ax_qty.set_xticklabels(years)
 
-        ax_lt.legend(title="Supplier", bbox_to_anchor=(1.02, 1), loc="upper left")
+        ax_qty.legend(title="supplier", bbox_to_anchor=(1.02, 1), loc="upper left")
 
-        # Optional: better grid & formatting
-        ax_lt.grid(axis='y', linestyle='--', alpha=0.5)
-        ax_lt.set_axisbelow(True)
+        st.pyplot(fig_qty)
 
-        st.pyplot(fig_lt)
+    with col2:
+        #------------------------
+        # ================= GROUPED BAR CHART (SERVICE LEVEL) =================
+        st.subheader("Average Service Level per Supplier (Grouped by Year)")
 
-#-------------------------------
-# ================= TOTAL QUANTITY RECEIVED PER YEAR (SIMPLE BAR CHART) =================
-# ================= TOTAL QUANTITY RECEIVED PER YEAR =================
-    st.subheader("Total Quantity Received per Year")
-
-    yearly_total = (
-        df
-        .groupby("Year", as_index=False)
-        .agg(total_quantity=("quantity received", "sum"))
-        .sort_values("Year")
-    )
-
-    if yearly_total.empty:
-        st.info("No quantity data available.")
-    else:
         import matplotlib.pyplot as plt
-        from matplotlib.ticker import FuncFormatter
+        import numpy as np
 
-        # Real historical years
-        real_years = yearly_total["Year"].astype(int).tolist()
-        real_quantities = yearly_total["total_quantity"].tolist()
+        years = sorted(agg_df["Year"].unique())
+        suppliers = sorted(agg_df["supplier"].unique())
 
-        # Add "This Year" as extra bar
-        all_labels = [str(y) for y in real_years] + ["This Year"]
-        all_values  = real_quantities + [40000]
+        bar_width = 0.8 / len(suppliers)
+        x = np.arange(len(years))
 
-        # Positions: years consecutive, then small gap before "This Year"
-        x_positions = list(range(len(real_years))) + [len(real_years) + 0.7]
+        fig_sl, ax_sl = plt.subplots(figsize=(12, 290/72))  # Changed to 200px
 
-        fig, ax = plt.subplots(figsize=(10, 5.5))
+        for i, supplier in enumerate(suppliers):
+            supplier_data = agg_df[agg_df["supplier"] == supplier]
 
-        bars = ax.bar(
-            x_positions,
-            all_values,
-            color = ["#4CAF50"] * len(real_years) + ["#FF7043"],   # different color for This Year
-            width = 0.68,
-            edgecolor = "black",
-            linewidth = 0.8
-        )
+            values = [
+                supplier_data[supplier_data["Year"] == year]["avg_service_level"].values[0]
+                if year in supplier_data["Year"].values else 0
+                for year in years
+            ]
 
-        # Value labels on top
-        for bar in bars:
-            h = bar.get_height()
-            ax.text(
-                bar.get_x() + bar.get_width()/2.,
-                h,
-                f"{int(h):,}",
-                ha='center',
-                va='bottom',
-                fontsize=10,
-                fontweight='bold'
+            ax_sl.bar(
+                x + i * bar_width,
+                values,
+                width=bar_width,
+                label=supplier,
+                color=supplier_colors[i % len(supplier_colors)]
             )
 
-        ax.set_xticks(x_positions)
-        ax.set_xticklabels(all_labels)
+        ax_sl.set_xlabel("Year")
+        ax_sl.set_ylabel("Average Service Level")
+        #ax_sl.set_title("Supplier Service Level Comparison by Year")
+
+        ax_sl.set_xticks(x + bar_width * (len(suppliers) - 1) / 2)
+        ax_sl.set_xticklabels(years)
+
+        ax_sl.legend(title="Supplier", bbox_to_anchor=(1.02, 1), loc="upper left")
+
+        st.pyplot(fig_sl)
+
+
+    col1, col2 = st.columns(2)
+    with col1:
+        # ================= GROUPED BAR CHART =================
+        st.subheader("Average Unit Price per Supplier (Grouped by Year)")
+
+        import matplotlib.pyplot as plt
+        import numpy as np
+
+        years = sorted(agg_df["Year"].unique())
+        suppliers = sorted(agg_df["supplier"].unique())
+
+        bar_width = 0.8 / len(suppliers)
+        x = np.arange(len(years))
+
+        fig, ax = plt.subplots(figsize=(12, 290/72))  # Changed to 200px
+
+        for i, supplier in enumerate(suppliers):
+            supplier_data = agg_df[agg_df["supplier"] == supplier]
+
+            values = [
+                supplier_data[supplier_data["Year"] == year]["Avg Unit Price"].values[0]
+                if year in supplier_data["Year"].values else 0
+                for year in years
+            ]
+
+            ax.bar(
+                x + i * bar_width,
+                values,
+                width=bar_width,
+                label=supplier,
+                color=supplier_colors[i % len(supplier_colors)]
+            )
 
         ax.set_xlabel("Year")
-        ax.set_ylabel("Total Quantity Received")
-        ax.set_title("Annual Total Quantity Received")
+        ax.set_ylabel("Average Unit Price")
+        #ax.set_title("Supplier Price Comparison by Year")
 
-        ax.grid(axis='y', linestyle='--', alpha=0.4)
-        ax.set_axisbelow(True)
-        ax.yaxis.set_major_formatter(FuncFormatter(lambda x, _: format(int(x), ",")))
+        ax.set_xticks(x + bar_width * (len(suppliers) - 1) / 2)
+        ax.set_xticklabels(years)
 
-        plt.tight_layout()
+        ax.legend(title="supplier", bbox_to_anchor=(1.02, 1), loc="upper left")
+
         st.pyplot(fig)
-#-----------------------------------------------------
-# ================= AVERAGE (QUANTITY × PRICE) PER YEAR =================
-# ================= AVERAGE (QUANTITY × PRICE) PER YEAR =================
-    st.subheader("Average Receipt Value per Year (Qty × Price per record)")
 
-    yearly_avg_value = (
-        df
-        .groupby("Year", as_index=False)
-        .agg(
-            avg_receipt_value=("Total Price", "mean"),
-            count_records=("Total Price", "count")
-        )
-        .sort_values("Year")
-    )
+    with col2:
+        #----------------------------------------
+        # ================= GROUPED BAR CHART – AVERAGE LEAD TIME =================
+        st.subheader("Average Lead Time per Supplier (Grouped by Year)")
 
-    if yearly_avg_value.empty:
-        st.info("No price/quantity data available for this calculation.")
-    else:
-        import matplotlib.pyplot as plt
-        from matplotlib.ticker import FuncFormatter
+        # Check if the column exists
+        lead_time_col = None
+        possible_names = ["lead time", "Lead Time", "lead_time", "LeadTime", "delivery days", "leadtime"]
 
-        # Real historical years
-        real_years = yearly_avg_value["Year"].astype(int).tolist()
-        real_avg_values = yearly_avg_value["avg_receipt_value"].tolist()
-        real_counts = yearly_avg_value["count_records"].tolist()
+        for col in df.columns:
+            if col.lower().replace(" ", "") in [n.lower().replace(" ", "") for n in possible_names]:
+                lead_time_col = col
+                break
 
-        # Add "This Year" bar
-        all_labels = [str(y) for y in real_years] + ["This Year"]
-        all_values = real_avg_values + [150000]
-        
-        # Positions: consecutive for history, small gap before "This Year"
-        x_positions = list(range(len(real_years))) + [len(real_years) + 0.7]
+        if not lead_time_col:
+            st.warning("Column 'lead time' (or similar) not found in the data → skipping lead time chart.")
+        else:
+            # Add average lead time to aggregation
+            agg_df["avg_lead_time"] = df.groupby(["Year", "supplier"])[lead_time_col].mean().values
 
-        fig_avg, ax_avg = plt.subplots(figsize=(10, 5.5))
+            import matplotlib.pyplot as pltbuf
+            import numpy as np
 
-        bars = ax_avg.bar(
-            x_positions,
-            all_values,
-            color=["#FF9800"] * len(real_years) + ["#E91E63"],   # orange historical → pink/magenta for This Year
-            width=0.68,
-            edgecolor="black",
-            linewidth=0.9
-        )
+            years = sorted(agg_df["Year"].unique())
+            suppliers = sorted(agg_df["supplier"].unique())
 
-        # Value labels on top of each bar
-        for i, bar in enumerate(bars):
-            height = bar.get_height()
-            count_text = f"n={real_counts[i]}" if i < len(real_counts) else ""
-            
-            # Main value
-            ax_avg.text(
-                bar.get_x() + bar.get_width()/2,
-                height,
-                f"{height:,.0f}" if height >= 100 else f"{height:,.1f}",
-                ha="center",
-                va="bottom",
-                fontsize=10,
-                fontweight="bold",
-                color="#111"
-            )
-            
-            # Small record count note (only for real years)
-            if count_text:
-                ax_avg.text(
-                    bar.get_x() + bar.get_width()/2,
-                    height * 0.92 if height > 0 else 0,
-                    count_text,
-                    ha="center",
-                    va="top",
-                    fontsize=9,
-                    color="#555"
+            bar_width = 0.8 / len(suppliers)
+            x = np.arange(len(years))
+
+            fig_lt, ax_lt = plt.subplots(figsize=(12, 290/72))  # Changed to 200px
+
+            for i, supplier in enumerate(suppliers):
+                supplier_data = agg_df[agg_df["supplier"] == supplier]
+
+                values = []
+                for year in years:
+                    match = supplier_data[supplier_data["Year"] == year]
+                    if not match.empty:
+                        values.append(match["avg_lead_time"].iloc[0])
+                    else:
+                        values.append(0)   # or np.nan if you prefer gaps
+
+                ax_lt.bar(
+                    x + i * bar_width,
+                    values,
+                    width=bar_width,
+                    label=supplier,
+                    color=supplier_colors[i % len(supplier_colors)]
                 )
 
-        ax_avg.set_xticks(x_positions)
-        ax_avg.set_xticklabels(all_labels)
+            ax_lt.set_xlabel("Year")
+            ax_lt.set_ylabel("Average Lead Time (days)")
+            #ax_lt.set_title("Supplier Lead Time Comparison by Year")
 
-        ax_avg.set_xlabel("Year", fontsize=12)
-        ax_avg.set_ylabel("Average Receipt Value\n(Qty × Unit Price)", fontsize=12)
-        ax_avg.set_title("Average Value per Receipt / Delivery Event per Year", fontsize=14, pad=15)
+            ax_lt.set_xticks(x + bar_width * (len(suppliers) - 1) / 2)
+            ax_lt.set_xticklabels(years)
 
-        ax_avg.grid(axis="y", linestyle="--", alpha=0.35)
-        ax_avg.set_axisbelow(True)
+            ax_lt.legend(title="Supplier", bbox_to_anchor=(1.02, 1), loc="upper left")
 
-        # Thousands separator
-        ax_avg.yaxis.set_major_formatter(FuncFormatter(lambda x, p: format(int(x), ",")))
+            # Optional: better grid & formatting
+            ax_lt.grid(axis='y', linestyle='--', alpha=0.5)
+            ax_lt.set_axisbelow(True)
 
-        plt.tight_layout()
-        st.pyplot(fig_avg)
-
-        st.caption("• \"This Year\" shows a fixed reference value of 2000 (not calculated from data)")
-        
-    # ================= NAVIGATION =================
-    st.markdown("<hr>", unsafe_allow_html=True)
-
-    col_back, col_next = st.columns([1, 1])
-
-    with col_back:
-        if st.button("← Back"):
-            st.session_state.page = "Material Selection"
-            st.rerun()
-
-    with col_next:
-        if st.button("Continue → Data Uploading", type="primary"):
-            st.session_state.page = "data"
-            st.rerun()
-
-
-
+            st.pyplot(fig_lt)
 
 # =====================================================================================================================
 # ============================================ PAGE 3 : ANALYSIS ====================================================
 # =====================================================================================================================
-import streamlit as st
-import pandas as pd
-import os
 
 st.markdown("""
 <style>
     /* General Font Setup */
     .custom-table-container {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        margin-bottom: 30px;
+        margin-bottom: -15px;
         overflow-x: auto;
     }
 
@@ -1435,87 +1555,310 @@ st.markdown("""
 
 
 def top_page():
-    st.markdown('<div class="big-title">Top Management Reveiw</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Review the Dataset Before & After Cleaning </div>', unsafe_allow_html=True)
+    st.markdown('<div class="big-title">Strategic Planning Overview</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Executive Dataset Review & Budget Analysis</div>', unsafe_allow_html=True)
 
 
     # Configuration
     folder_path = 'Database'
-    file_name = 'master.xlsx'
+    file_name = 'master final.xlsx'
     file_path = os.path.join(folder_path, file_name)
 
-    # Check if file exists
+        # Check if file exists
     if os.path.exists(file_path):
         try:
-            # Read the Excel file
             df = pd.read_excel(file_path)
             df.columns = df.columns.str.strip()
 
-            # Check if 'Type' column exists
-            if 'Type' in df.columns:
-                types = df['Type'].unique()
+            if 'Type' not in df.columns:
+                st.error("The Excel file does not contain a 'Type' column.")
+            else:
+                # Get unique types and remove any NaN
+                types = sorted(df['Type'].dropna().unique())
+                
+                if len(types) == 0:
+                    st.warning("No valid 'Type' values found in the file.")
+                else:
+                    # ── Radio / Selection ───────────────────────────────
+                    col1, col2 = st.columns([1,4])
 
-                for t in types:
-                    # Display attractive Section Title
-                    st.markdown(f'<div class="section-title">Type: {t}</div>', unsafe_allow_html=True)
-                    
-                    df_type = df[df['Type'] == t]
+                    with col1:
+                        st.markdown(f"""
+                            <div style="color: #1E88E5; font-size:30px; font-weight:bold;">
+                                    Select Material Type
+                            </div>
+                        """, unsafe_allow_html=True)
 
-                    # Custom HTML Table Generation
-                    table_html = f'<div class="custom-table-container"><table class="modern-table">'
+
+
+                    with col2:
+                    # Option 1: Radio (recommended when few types)
+                        selected_type = st.radio(
+                            "Show materials of type:",
+                            options=types,
+                            horizontal=True,           # nicer on wide screens
+                            index=0,                   # pre-select first one
+                            key="type_radio"
+                        )
                     
-                    # --- Header Row ---
-                    table_html += '<thead><tr>'
-                    cols_to_display = ['Material Name', 'SKU', 'Quantity', 'Average Price', 'Total Value', 'Contract Type', 'Incoterm']
-                    
-                    for i, col in enumerate(cols_to_display):
-                        if col in df_type.columns:
+                    # Option 2: Dropdown (better when many types)
+                    # selected_type = st.selectbox(
+                    #     "Select material type:",
+                    #     options=types,
+                    #     index=0
+                    # )
+
+                    # Filter the dataframe
+                    df_filtered = df[df['Type'] == selected_type].copy()
+
+                    if df_filtered.empty:
+                        st.info(f"No materials found for type: **{selected_type}**")
+                    else:
+                        # Optional: nice header
+                        #st.markdown(f"### Type: **{selected_type}** ({len(df_filtered)} items)")
+
+                        # Columns to show
+                        cols_to_display = [
+                            'Material Name', 'SKU', 'Quantity',
+                            'Average Price($)/Unit', 'Total Value',
+                            'Contract Type', 'Incoterm'
+                        ]
+
+                        # Keep only columns that actually exist
+                        available_cols = [c for c in cols_to_display if c in df_filtered.columns]
+
+                        # Show modern table (your custom styling)
+                        table_html = '''
+                        <div class="custom-table-container">
+                            <table class="modern-table">
+                                <thead>
+                                    <tr>
+                        '''
+
+                        for col in available_cols:
                             css_class = ""
                             if col == 'Material Name':
                                 css_class = "mat-name-header"
                             elif col == 'SKU':
                                 css_class = "sku-header"
                             table_html += f'<th class="{css_class}">{col}</th>'
-                    table_html += '</tr></thead><tbody>'
 
-                    # --- Data Rows ---
-                    for index, row in df_type.iterrows():
-                        table_html += '<tr class="data-row">'
-                        
-                        for i, col in enumerate(cols_to_display):
-                            if col in df_type.columns:
-                                cell_value = row[col]
+                        table_html += '''
+                                    </tr>
+                                </thead>
+                                <tbody>
+                        '''
+
+                        for _, row in df_filtered.iterrows():
+                            table_html += '<tr class="data-row">'
+                            for col in available_cols:
                                 cell_class = ""
-                                
                                 if col == 'Material Name':
                                     cell_class = "mat-name-cell"
                                 elif col == 'SKU':
                                     cell_class = "sku-cell"
-                                
-                                table_html += f'<td class="{cell_class}">{cell_value}</td>'
-                        
-                        table_html += '</tr>'
+                                table_html += f'<td class="{cell_class}">{row[col]}</td>'
+                            table_html += '</tr>'
 
-                    table_html += '</tbody></table></div>'
-                    st.markdown(table_html, unsafe_allow_html=True)
-                    
+                        table_html += '''
+                                </tbody>
+                            </table>
+                        </div>
+                        '''
 
-            else:
-                st.error("The Excel file does not contain a 'Type' column.")
+                        st.markdown(table_html, unsafe_allow_html=True)
+
+                        # Optional: also show as pandas table (good for sorting / searching)
+                        # st.dataframe(df_filtered[available_cols], use_container_width=True)
 
         except Exception as e:
             st.error(f"Error reading Excel file: {e}")
 
+
     else:
-        st.warning(f"File not found: {file_path}. Please ensure 'master.xlsx' is inside the 'Database' folder.")
+        st.warning(f"File not found: {file_path}. Please ensure 'master final.xlsx' is inside the 'Database' folder.")
 
     st.markdown('<hr class="custom-divider">', unsafe_allow_html=True)
 
-    st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); text-align: center; color: white;">
-            <div style='font-size: 2.9rem; opacity: 1;'>Total 2026 Materials Budget: 123456 $</div>
-        </div>
-    """, unsafe_allow_html=True)
+    col1,col2 = st.columns ([3,2])  
+    with col1:
+        st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px; margin-bottom:20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); text-align: center; color: white;">
+                <div style='font-size: 2.6rem; opacity: 1;'>Total 2026 Materials Budget: 7,828,813 $</div>
+            </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
+            <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; border-left: 5px solid #667eea; border-right: 5px solid #667eea;  margin-bottom: 18px;">
+                <p style="margin: 0; font-size: 20px; color: #333; font-weight: 500;">
+                    The final procurement strategy and budget allocation are subject to your executive review and approval.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
+            #========next /back button
+    col_left, col_spacer, col_right = st.columns([1, 2, 1])
+
+    with col_left:
+        if st.button("← Back to Role Selection", use_container_width=True):
+            st.session_state.page = "landing"
+            st.rerun()
+
+    with col_right:    
+        if st.button("Next → Price Indices Over Time", type="primary" ,use_container_width=True):
+            st.session_state.page = "top manager1"
+            st.rerun()
+
+
+def top_page1():
+    st.markdown('<div class="big-title">Price Indices Over Time</div>', unsafe_allow_html=True)
+
+    db_path = "Database/Price Indices.xlsx"
+
+    if os.path.exists(db_path):
+        try:
+            df_indices = pd.read_excel(db_path)
+            df_indices.columns = df_indices.columns.str.strip()
+
+            required_cols = [
+                "Year",
+                "PVC Index (2019=100)",
+                "PE Index (2019=100)",
+                "XLPE Index (Proxy)"
+            ]
+
+            if all(col in df_indices.columns for col in required_cols):
+
+                df_indices["Year"] = df_indices["Year"].astype(int)
+                df_indices = df_indices.sort_values("Year")
+
+                # ---- Keep calculation (logic unchanged) ----
+                df_indices["Total Index"] = (
+                    df_indices["PVC Index (2019=100)"] +
+                    df_indices["PE Index (2019=100)"] +
+                    df_indices["XLPE Index (Proxy)"]
+                )
+
+                years = df_indices["Year"].tolist()
+
+                x_labels = [str(y) for y in years]
+                x_labels[-1] = f"{years[-1]} (Forecasted)"
+
+                col1, col2 = st.columns(2)
+
+                # ================= LINE CHART =================
+                with col1:
+                    st.subheader("Comparative Price Indices Trend")
+
+                    fig2, ax2 = plt.subplots(figsize=(10, 6))
+
+                    # PVC
+                    ax2.plot(
+                        df_indices["Year"][:-1],
+                        df_indices["PVC Index (2019=100)"][:-1],
+                        marker="o",
+                        linewidth=2,
+                        label="PVC Index"
+                    )
+                    ax2.plot(
+                        df_indices["Year"].iloc[-1],
+                        df_indices["PVC Index (2019=100)"].iloc[-1],
+                        marker="o",
+                        markersize=9,
+                        linestyle="None",
+                        color="red"
+                    )
+
+                    # PE
+                    ax2.plot(
+                        df_indices["Year"][:-1],
+                        df_indices["PE Index (2019=100)"][:-1],
+                        marker="s",
+                        linewidth=2,
+                        label="PE Index"
+                    )
+                    ax2.plot(
+                        df_indices["Year"].iloc[-1],
+                        df_indices["PE Index (2019=100)"].iloc[-1],
+                        marker="s",
+                        markersize=9,
+                        linestyle="None",
+                        color="red"
+                    )
+
+                    # XLPE
+                    ax2.plot(
+                        df_indices["Year"][:-1],
+                        df_indices["XLPE Index (Proxy)"][:-1],
+                        marker="^",
+                        linewidth=2,
+                        label="XLPE Index"
+                    )
+                    ax2.plot(
+                        df_indices["Year"].iloc[-1],
+                        df_indices["XLPE Index (Proxy)"].iloc[-1],
+                        marker="^",
+                        markersize=9,
+                        linestyle="None",
+                        color="red"
+                    )
+
+                    ax2.set_xticks(years)
+                    ax2.set_xticklabels(x_labels)
+                    ax2.legend()
+                    ax2.grid(True, linestyle="--", alpha=0.5)
+                    ax2.set_axisbelow(True)
+
+                    st.pyplot(fig2)
+
+                # ================= STYLED TABLE =================
+                with col2:
+                    st.subheader("Price Indices – Detailed Data Table")
+
+                    table_df = df_indices.copy()
+                    table_df.loc[table_df.index[-1], "Year"] = f"{years[-1]} (Forecasted)"
+
+                    # 🔴 REMOVE TOTAL INDEX COLUMN (ONLY VISUAL)
+                    table_df = table_df.drop(columns=["Total Index"], errors="ignore")
+                    table_df = table_df.round(1)
+
+                    table_html = """
+                    <div class="custom-table-container">
+                        <table class="modern-table">
+                            <thead>
+                                <tr>
+                    """
+
+                    for col in table_df.columns:
+                        table_html += f"<th>{col}</th>"
+
+                    table_html += "</tr></thead><tbody>"
+
+                    for _, row in table_df.iterrows():
+                        table_html += "<tr class='data-row'>"
+                        for col in table_df.columns:
+                            table_html += f"<td>{row[col]}</td>"
+                        table_html += "</tr>"
+
+                    table_html += "</tbody></table></div>"
+
+                    st.markdown(table_html, unsafe_allow_html=True)
+
+            else:
+                st.error("Missing required columns in Price Indices file.")
+
+        except Exception as e:
+            st.error(f"Error reading file: {e}")
+    else:
+        st.warning("Price Indices file not found.")
+
+    # ================= NAVIGATION =================
+    col_left, col_spacer, col_right = st.columns([1, 2, 1])
+
+    with col_left:
+        if st.button("← Back to Strategic Planning Overview", use_container_width=True):
+            st.session_state.page = "top manager"
+            st.rerun()
 
 
 # =====================================================================================================================
@@ -2270,7 +2613,7 @@ def recommendation_page():
             st.markdown(f"""
             <div class="detail-card" style="padding: 0.5rem; border-radius: 10px; background-color: #f8f9fa; margin-bottom: 1rem; border-left: 5px solid #1565C0;">
                 <h3 style="color:#1565C0; margin:0;">
-                    Forecasted Average Price for Year (
+                    Forecasted Avg. Price for Year (
                     <strong style="color: rgb(255, 75, 75);">{next_year}</strong> ): 
                     <strong style="color: rgb(255, 75, 75);">{forecast_val:.3f}</strong> $ per {purchasing_unit}             
                 </h3>
@@ -3042,7 +3385,7 @@ def future_forecasting_page():
     forecast_end_year = future_dates[-1].year
 
     st.markdown(f"""
-        <div class="detail-card" style="padding-left: 2.5rem; border-radius: 10px; background-color: #f8f9fa; margin-bottom: 1rem; border-left: 5px solid #1565C0;">
+        <div class="detail-card" style="padding-left: 2rem; padding: 18px; border-radius: 10px; background-color: #f8f9fa; margin-bottom: 1rem; border-left: 5px solid #1565C0;">
             <h3 style="color:#1565C0; margin:0;">
                 Total Demand for the Forecasted Period ( 
                 <strong style="color: rgb(255, 75, 75);">{future_steps} Months</strong> ): ( <strong style="color: rgb(255, 75, 75);">{formatted_total}</strong> ) Units
@@ -3391,14 +3734,14 @@ def eoq_smooth1_page():
         
         with col1:
             st.markdown(f"""
-                <div style='background-color: #e8f5e9; padding: 15px; border-radius: 8px; text-align: center;   margin-bottom: 20px; '>
+                <div style='background-color: #e8f5e9; padding: 10px; border-radius: 8px; text-align: center;   margin-bottom: 20px; '>
                     <strong style="font-size:20px ;" >Sigma Demand = {sigma_demand:.2f}</strong>
                 </div>
             """, unsafe_allow_html=True)
         
         with col2:
             st.markdown(f"""
-                <div style='background-color: #fff3e0; padding: 15px; border-radius: 8px; text-align: center;    margin-bottom: 20px;'>
+                <div style='background-color: #fff3e0; padding: 10px; border-radius: 8px; text-align: center;    margin-bottom: 20px;'>
                     <strong style="font-size:20px ;">Sigma Error = {sigma_error:.2f}</strong>
                 </div>
             """, unsafe_allow_html=True)
@@ -3409,7 +3752,7 @@ def eoq_smooth1_page():
         with col3:
             if avg_lead_time is not None:
                 st.markdown(f"""
-                    <div style='background-color: #e3f2fd; padding: 15px; border-radius: 8px; text-align: center;'>
+                    <div style='background-color: #e3f2fd; padding: 10px; border-radius: 8px; text-align: center;'>
                         <strong style="font-size:20px ;">Avg Lead Time = {avg_lead_time:.2f}</strong>
                     <span style = "font-size: 22px;" class="help-icon" data-help="The Avgerage of the Lead Time & Service Level have been calculated based on the previously uploaded data.">?</span>
                     </div>
@@ -3418,7 +3761,7 @@ def eoq_smooth1_page():
         with col4:
             if avg_service_level is not None:
                 st.markdown(f"""
-                    <div style='background-color: #f3e5f5; padding: 15px; border-radius: 8px; text-align: center;'>
+                    <div style='background-color: #f3e5f5; padding: 10px; border-radius: 8px; text-align: center;'>
                         <strong style="font-size:20px ;">Avg Service Level = {avg_service_level:.2f}</strong>
                     </div>
                 """, unsafe_allow_html=True)
@@ -3431,10 +3774,10 @@ def eoq_smooth1_page():
     # ================= Layout ============================================================
     if is_smooth_demand:
                 # ================= SUPPLIER & SAFETY STOCK =================
-        st.markdown("### Supplier Selection & Safety Stock")
+        st.markdown("### Supplier Selection:")
 
         # 1. Load Supplier Database
-        supplier_db_path = os.path.join("Database", "Suppliers Info.xlsx")
+        supplier_db_path = os.path.join("Database", "Suppliers Info final.xlsx")
         
         # Initialize variables
         lead_time_input = 0
@@ -3627,7 +3970,7 @@ def eoq_smooth1_page():
                 st.rerun()
 
         with col_right:
-            if st.button("Next → Sefety Stock & Re-Ordering Point", type="primary", use_container_width=True):
+            if st.button("Next → Sefety Stock & ROP", type="primary", use_container_width=True):
                 st.session_state.page = "eoq_smooth2"
                 st.rerun()
 
@@ -3689,10 +4032,13 @@ def eoq_smooth2_page():
         border: 1px solid #e0e0e0;
         box-shadow: 0 2px 2px #1565C0;
         margin-bottom: 12px;
+
     }
     .info-title {
         font-size: 20px;
         margin-bottom: 4px;
+        margin-up: -4px;
+        
     }
     .info-value {
         font-size: 25px;
@@ -4746,7 +5092,7 @@ def smooth_final_summary_page():
     # ================= LAYOUT =================
 
     # --- ROW 1: FORECASTING PERFORMANCE ---
-    st.markdown("### 🤖 Forecasting Model Results")
+    st.markdown("### Forecasting Model Results")
     
     # (Using same style as before)
     col1, col2, col3, col4 = st.columns(4)
@@ -4884,8 +5230,8 @@ def smooth_final_summary_page():
                 price_text = f"Discounted Price: ${unit_price:.2f} / {purchasing_unit}"
                 moq_note = f"*(Adjusted for MOQ: {min_order_qty} units)" if best_status == "Adjusted to MOQ" else ""
             else:
-                discount_status = "**NO** - Using standard pricing"
-                price_text = f"**Standard Price:** ${unit_price:.2f} / {purchasing_unit}"
+                discount_status = "NO - Using standard pricing"
+                price_text = f"Standard Price: ${unit_price:.2f} / {purchasing_unit}"
                 moq_note = ""
             
             st.markdown(f"""
@@ -5141,10 +5487,10 @@ def eoq_erratic1_page():
     # ================= Layout ============================================================
     if isinstance(demand_type, str) and "erratic" in demand_type.lower():
                 # ================= SUPPLIER & SAFETY STOCK =================
-        st.markdown("### Supplier Selection & Safety Stock")
+        st.markdown("### Supplier Selection:")
 
         # 1. Load Supplier Database
-        supplier_db_path = os.path.join("Database", "Suppliers Info.xlsx")
+        supplier_db_path = os.path.join("Database", "Suppliers Info final.xlsx")
         
         # Initialize variables
         lead_time_input = 0
@@ -6113,7 +6459,7 @@ def erratic_final_summary_page():
     # ================= LAYOUT =================
 
     # --- ROW 1: FORECASTING PERFORMANCE (New Addition) ---
-    st.markdown("### 🤖 Forecasting Model Results")
+    st.markdown("### Forecasting Model Results")
     
     
 
@@ -6277,7 +6623,7 @@ def supplier_report_page():
     st.markdown('<div class="big-title">Supplier Performance Dashboard</div>', unsafe_allow_html=True)
 
     # Path to the database
-    db_path = os.path.join("Database", "Suppliers Info.xlsx")
+    db_path = os.path.join("Database", "Suppliers Info final.xlsx")
 
     # Check if file exists before proceeding
     if not os.path.exists(db_path):
@@ -6319,7 +6665,7 @@ if st.session_state.logged_in:
 
     # --- 1. DEFINE PAGE GROUPS ---
     COMMON_PAGES = [
-        "Material Selection", "material_excel", "data", "top manager","analysis", "analysis2", "analysis3", "analysis4", 
+        "Material Selection", "material_excel", "material_excel1", "data", "top manager","top manager1" ,"analysis", "analysis2", "analysis3", "analysis4", 
         "results from analysis", "recommendation", "forecasting", 
         "future forecasting"
     ]
@@ -6405,8 +6751,12 @@ if st.session_state.logged_in:
         page_material() 
     elif st.session_state.page == "material_excel":
         page_material_excel()
+    elif st.session_state.page == "material_excel1":
+        page_material_excel1()
     elif st.session_state.page == "top manager":
         top_page()
+    elif st.session_state.page == "top manager1":
+        top_page1()
     elif st.session_state.page == "data":
         page_data()
     elif st.session_state.page == "analysis":
@@ -6456,12 +6806,3 @@ if st.session_state.logged_in:
 
     elif st.session_state.page == "supplier report":
         supplier_report_page()
-
-
-
-
-
-
-
-
-
