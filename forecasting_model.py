@@ -238,14 +238,23 @@ class ForecastingModel:
 
     def prepare_features(self, data, lookback=12):
         """
-        Create lagged features for ML models
-        data: DataFrame with column 'demand'
+        Create lagged features for ML models.
+        ONLY keeps 'demand', 'date', and the generated lag features.
+        Removes any other columns (like text categories) to avoid errors.
         """
         df = data.copy()
 
+        # Create lag features based on demand
         for i in range(1, lookback + 1):
             df[f'lag_{i}'] = df['demand'].shift(i)
 
+        # --- THE FIX ---
+        # We only want 'date', 'demand', and the lags.
+        # Drop any other columns that might contain text (like 'B', 'A', etc.)
+        cols_to_keep = ['date', 'demand'] + [f'lag_{i}' for i in range(1, lookback + 1)]
+        df = df[cols_to_keep]
+
+        # Remove rows with NaNs created by shifting
         df = df.dropna().reset_index(drop=True)
         return df
 
@@ -568,21 +577,36 @@ class CatBoostModel(ForecastingModel):
             random_seed=42,
             verbose=False
         )
-        self.feature_names = None  # سيتم تعيينه في كل fit
+        self.feature_names = None 
 
+    # ---------------------------------------------------------
+    # REPLACE THIS METHOD IN YOUR FILE
+    # ---------------------------------------------------------
     def _create_features(self, data):
         df = data.copy().reset_index(drop=True)
 
+        # Create Lags
         for i in range(1, self.lookback + 1):
             df[f"lag_{i}"] = df['demand'].shift(i)
 
+        # Create Time Features
         df['month'] = pd.to_datetime(df['date']).dt.month
         df['trend'] = np.arange(len(df))
 
+        # -----------------------------------------------------
+        # THE CRITICAL FIX: Filter out extra columns
+        # -----------------------------------------------------
+        # We ONLY keep these columns. 
+        # This ensures 'B' or any other text column is dropped before training.
+        cols_to_keep = ['date', 'demand'] + [f"lag_{i}" for i in range(1, self.lookback + 1)] + ['month', 'trend']
+        df = df[cols_to_keep]
+        
         df.dropna(inplace=True)
         return df
+    # ---------------------------------------------------------
 
     def fit(self, train_data):
+        # Use the fixed method above
         df = self._create_features(train_data)
 
         X = df.drop(['date', 'demand'], axis=1)
@@ -596,7 +620,8 @@ class CatBoostModel(ForecastingModel):
         # حفظ البيانات اللازمة للتنبؤ
         self.last_demand_values = train_data['demand'].tail(self.lookback).values.tolist()
         self.last_date = train_data['date'].iloc[-1]
-        self.last_trend = len(train_data) - 1
+        # Adjust trend start because we filtered data
+        self.last_trend = len(train_data) - 1 
 
         return self
 
@@ -610,7 +635,7 @@ class CatBoostModel(ForecastingModel):
 
         for i in range(steps):
             row = {}
-            # Lags (نفس الترتيب)
+            # Lags
             for j in range(1, self.lookback + 1):
                 row[f"lag_{j}"] = current_lags[-j]
 
@@ -621,7 +646,7 @@ class CatBoostModel(ForecastingModel):
 
             # تحويل إلى DataFrame مع ضمان الترتيب الصحيح
             X_pred = pd.DataFrame([row])
-            X_pred = X_pred.reindex(columns=self.feature_names, fill_value=0)  # هنا الحل الآمن!
+            X_pred = X_pred.reindex(columns=self.feature_names, fill_value=0) 
 
             pred = self.model.predict(X_pred)[0]
             preds.append(pred)
@@ -630,6 +655,8 @@ class CatBoostModel(ForecastingModel):
             current_date = next_date
 
         return np.array(preds)
+
+
 # ========================================
 # GRUModel Model
 # ========================================
